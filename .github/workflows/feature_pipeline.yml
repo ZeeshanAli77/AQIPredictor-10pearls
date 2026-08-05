@@ -42,7 +42,7 @@ jobs:
           git config user.email "actions@github.com"
           git add data/features.csv
           git commit -m "Update features CSV - $(date)" || echo "No changes to commit"
-          git push origin main
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
 
       - name: Notify on failure
         if: failure()
