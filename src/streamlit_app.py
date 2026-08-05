@@ -562,7 +562,7 @@ def main():
         st.markdown("---")
         st.markdown("### 🔍 AI Model Explainability (SHAP)")
         st.markdown("*How different factors influence our AQI predictions*")
-        st.image("artifacts/shap_summary.png", caption="Feature Importance Analysis", use_container_width=True)
+        st.image("artifacts/shap_summary.png", caption="Feature Importance Analysis", use_column_width=True)
 
     st.markdown("---")
 

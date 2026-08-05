@@ -703,7 +703,7 @@ HOPSWORKS_API_KEY  = "your_api_key_here"
 Run the full stack on your development machine:
 
 ```bash
-git clone https://github.com/Abubakar-Imran/pearls-aqi-predictor.git
+git clone https://github.com/ZeeshanAli77/10pearlsss.git
 cd pearls-aqi-predictor
 python -m venv .venv
 source .venv/bin/activate

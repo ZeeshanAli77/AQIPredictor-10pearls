@@ -6,6 +6,13 @@ ENV/
 env/
 .venv/
 
+# Secrets and environment variables
+.env
+.env.local
+.env.*.local
+.streamlit/secrets.toml
+secrets.toml
+
 # Python cache and distribution
 __pycache__/
 *.pyc
