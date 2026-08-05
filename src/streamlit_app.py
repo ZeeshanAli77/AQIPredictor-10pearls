@@ -363,7 +363,7 @@ def load_forecast():
         clf_72 = joblib.load(os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_model.pkl"))
 
         fs = project.get_feature_store()
-        fg = fs.get_feature_group("aqi_features", version=1)
+        fg = fs.get_feature_group("aqi_features", version=7)
         df = fg.read(online=True)
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
         df = df.sort_values("timestamp")
@@ -418,6 +418,11 @@ def load_forecast():
 
 
 def main():
+    # Clear cache button
+    if st.sidebar.button("🔄 Clear Cache & Reload Models"):
+        st.cache_data.clear()
+        st.rerun()
+    
     # Header
     st.markdown("""
         <div class="header-banner">
@@ -426,7 +431,6 @@ def main():
             <div class="developer-tag">🔬 Developed by Zeeshan</div>
         </div>
     """, unsafe_allow_html=True)
-
     with st.spinner("🔄 Loading real-time data..."):
         current = load_current_aqi()
         forecast = load_forecast()
