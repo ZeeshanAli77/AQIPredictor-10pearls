@@ -214,12 +214,14 @@ def run_feature_pipeline():
 
         # Try to store in Hopsworks, but don't fail the pipeline if it doesn't work
         print("Storing features in Hopsworks...")
+       # Try to store in Hopsworks, but don't fail the pipeline if it doesn't work
+        print("Storing features in Hopsworks...")
         try:
             store_features(features)
             print("[SUCCESS] Features written to Hopsworks ✓")
         except Exception as e:
-            print(f"[WARNING] Hopsworks write failed: {type(e).__name__}: {e}")
-            print("[FALLBACK] Continuing with CSV-only storage")
+            print(f"[ERROR] Hopsworks write failed: {type(e).__name__}: {e}")
+            raise
         
         print("Saving features to local CSV...")
         save_features_to_csv(features)
