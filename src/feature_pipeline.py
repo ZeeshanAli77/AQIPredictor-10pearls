@@ -192,7 +192,7 @@ def store_features(feature_row: dict):
         df,
         write_options={
             "wait_for_job": True,
-            "start_offline_materialization": False,
+            "start_offline_materialization": True,
         },
     )
     print(f"[OK] Features stored to Hopsworks at {feature_row['timestamp']}")
