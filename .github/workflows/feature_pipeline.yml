@@ -22,7 +22,11 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
+          for i in {1..3}; do
+            pip install -r requirements.txt && break
+            echo "Attempt $i failed, retrying..."
+            sleep 10
+          done
 
       - name: Run Feature Pipeline
         env:
@@ -31,6 +35,14 @@ jobs:
         run: |
           cd src
           python feature_pipeline.py
+
+      - name: Commit and push CSV
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add data/features.csv
+          git commit -m "Update features CSV - $(date)" || echo "No changes to commit"
+          git push origin main
 
       - name: Notify on failure
         if: failure()
