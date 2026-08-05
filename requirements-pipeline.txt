@@ -7,3 +7,7 @@ python-dotenv==1.2.2
 pyarrow==14.0.1
 requests==2.31.0
 joblib
+matplotlib
+shap
+xgboost
+scikit-learn
