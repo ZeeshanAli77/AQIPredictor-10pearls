@@ -1,0 +1,11 @@
+city:
+  name: "Islamabad"
+  country: "Pakistan"
+  latitude: 24.8607
+  longitude: 67.0011
+  aqicn_station: "@472153"      # PNEC Karachi station
+
+feature_store:
+  project_name: "zeeshanproject"   # must match your Hopsworks project name exactly
+  feature_group_name: "aqi_features"
+  feature_group_version: 7

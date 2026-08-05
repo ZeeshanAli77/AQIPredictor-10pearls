@@ -1,0 +1,15 @@
+numpy
+pandas
+hopsworks[python]==4.7.*
+confluent-kafka
+pyyaml
+python-dotenv
+pyarrow
+joblib
+matplotlib
+seaborn
+statsmodels
+shap
+xgboost
+streamlit
+plotly

@@ -1,0 +1,32 @@
+# Environments and Secrets
+.env
+.env.*
+venv/
+ENV/
+env/
+
+# Python cache and distribution
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Large model binaries (they are versioned and stored in Hopsworks Model Registry)
+*.pkl
+
+# Local large data files
+data/backfill_preview.csv
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+aqi_completion_plan.md 
+IMPLEMENTATION_STATUS.md 
