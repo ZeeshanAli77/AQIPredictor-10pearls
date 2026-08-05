@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-LOCAL_BACKFILL_PATH = os.path.join(BASE_DIR, "data", "backfill_preview.csv")
+LOCAL_BACKFILL_PATH = os.path.join(BASE_DIR, "data", "features.csv")
 
 HOPSWORKS_API_KEY = os.getenv("HOPSWORKS_API_KEY", "")
 
