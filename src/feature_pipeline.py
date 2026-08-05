@@ -19,6 +19,8 @@ load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config", "config.yaml")
+DATA_DIR = os.path.join(BASE_DIR, "data")
+CSV_PATH = os.path.join(DATA_DIR, "features.csv")
 
 
 def load_config() -> dict:
@@ -134,6 +136,19 @@ def compute_features(pollutants: dict, weather: dict, timestamp: datetime) -> di
     return feature_row
 
 
+def save_features_to_csv(feature_row: dict):
+    """Save feature row to local CSV file (append mode)."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    df = pd.DataFrame([feature_row])
+    
+    # If CSV exists, append; otherwise create new
+    if os.path.exists(CSV_PATH):
+        df.to_csv(CSV_PATH, mode="a", header=False, index=False)
+    else:
+        df.to_csv(CSV_PATH, mode="w", header=True, index=False)
+    print(f"[OK] Features saved to CSV: {CSV_PATH}")
+
+
 def store_features(feature_row: dict):
     """Connect to Hopsworks and upsert the feature row."""
     if not HOPSWORKS_API_KEY:
@@ -198,6 +213,9 @@ def run_feature_pipeline():
 
     print("Storing features in Hopsworks...")
     store_features(features)
+    
+    print("Saving features to local CSV...")
+    save_features_to_csv(features)
 
     return features
 
