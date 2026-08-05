@@ -96,7 +96,7 @@ def fetch_training_data() -> pd.DataFrame:
         project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
         fs = project.get_feature_store()
 
-        fg = fs.get_feature_group("aqi_features", version=1)
+        fg = fs.get_feature_group("aqi_features", version=7)
         df = fg.read()
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
         df = df.sort_values("timestamp")
