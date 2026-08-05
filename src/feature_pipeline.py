@@ -195,29 +195,47 @@ def store_features(feature_row: dict):
             "start_offline_materialization": False,
         },
     )
-    print(f"[OK] Features stored at {feature_row['timestamp']}")
+    print(f"[OK] Features stored to Hopsworks at {feature_row['timestamp']}")
 
 
 def run_feature_pipeline():
     timestamp = datetime.now(timezone.utc)
 
-    print("Fetching AQICN data...")
-    aqicn_raw = fetch_aqicn_data(CITY["aqicn_station"])
-    pollutants = extract_pollutants(aqicn_raw)
+    try:
+        print("Fetching AQICN data...")
+        aqicn_raw = fetch_aqicn_data(CITY["aqicn_station"])
+        pollutants = extract_pollutants(aqicn_raw)
 
-    print("Fetching weather data...")
-    weather = fetch_weather_data(LAT, LON)
+        print("Fetching weather data...")
+        weather = fetch_weather_data(LAT, LON)
 
-    print("Computing features...")
-    features = compute_features(pollutants, weather, timestamp)
+        print("Computing features...")
+        features = compute_features(pollutants, weather, timestamp)
 
-    print("Storing features in Hopsworks...")
-    store_features(features)
-    
-    print("Saving features to local CSV...")
-    save_features_to_csv(features)
+        # Try to store in Hopsworks, but don't fail the pipeline if it doesn't work
+        print("Storing features in Hopsworks...")
+        try:
+            store_features(features)
+            print("[SUCCESS] Features written to Hopsworks ✓")
+        except Exception as e:
+            print(f"[WARNING] Hopsworks write failed: {type(e).__name__}: {e}")
+            print("[FALLBACK] Continuing with CSV-only storage")
+        
+        print("Saving features to local CSV...")
+        save_features_to_csv(features)
+        
+        print("=" * 50)
+        print(f"[COMPLETE] Feature pipeline run at {timestamp}")
+        print("=" * 50)
 
-    return features
+        return features
+
+    except Exception as e:
+        print("=" * 50)
+        print(f"[CRITICAL ERROR] Pipeline failed: {type(e).__name__}")
+        print(f"Message: {e}")
+        print("=" * 50)
+        raise
 
 
 if __name__ == "__main__":
