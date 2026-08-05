@@ -256,10 +256,13 @@ AQI_LEVELS = [
 
 def get_secret(name: str) -> str:
     try:
-        return str(st.secrets[name])
-    except Exception:
-        return os.getenv(name, "")
-
+        value = str(st.secrets[name])
+        print(f"✓ Got {name} from st.secrets: {value[:20] if len(value) > 20 else value}...")
+        return value
+    except Exception as e:
+        value = os.getenv(name, "")
+        print(f"✗ st.secrets failed for {name}, got from env: {value[:20] if value and len(value) > 20 else value}... (error: {e})")
+        return value
 
 def classify_aqi(value: float) -> tuple:
     try:
@@ -338,11 +341,12 @@ def load_current_aqi():
         "updated": data.get("time", {}).get("s", ""),
     }
 
-
 @st.cache_data(ttl=3600)
 def load_forecast():
     try:
         project = hopsworks.login(
+            
+            
             api_key_value=get_secret("HOPSWORKS_API_KEY")
         )
         mr = project.get_model_registry()

@@ -32,6 +32,7 @@ jobs:
       - name: Run Training Pipeline
         env:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          SPARK_SUBMIT_OPTIONS: "-Dspark.metrics.conf=/dev/null -Dcom.banzaicloud.spark.metrics.enabled=false"
         run: |
           cd src
           python training_pipeline.py
