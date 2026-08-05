@@ -1,5 +1,5 @@
 """
-Islamabad Air Quality Forecasting System
+Islamabad Air Quality Forecasting System - Enhanced UI
 Real-time AQI predictions for Islamabad, Pakistan
 Developed by Zeeshan
 """
@@ -42,64 +42,214 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Custom CSS for branding
+# Enhanced Custom CSS
 st.markdown("""
     <style>
-    .header-banner {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        padding: 30px;
-        border-radius: 10px;
-        color: white;
-        margin-bottom: 30px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    /* Main background and general styling */
+    [data-testid="stMainBlockContainer"] {
+        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+        padding: 0;
     }
+    
+    /* Header banner - more premium look */
+    .header-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 50px 30px;
+        border-radius: 20px;
+        color: white;
+        margin-bottom: 40px;
+        box-shadow: 0 20px 60px rgba(102, 126, 234, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+    }
+    
     .header-banner h1 {
         margin: 0;
-        font-size: 2.5em;
+        font-size: 3em;
+        font-weight: 800;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     }
+    
     .header-banner p {
-        margin: 5px 0 0 0;
-        font-size: 1.1em;
-        opacity: 0.9;
+        margin: 15px 0 0 0;
+        font-size: 1.2em;
+        opacity: 0.95;
+        font-weight: 300;
     }
+    
     .developer-tag {
         display: inline-block;
-        background: rgba(255,255,255,0.2);
-        padding: 5px 12px;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 8px 16px;
+        border-radius: 25px;
+        font-size: 0.95em;
+        margin-top: 15px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        backdrop-filter: blur(10px);
+    }
+    
+    /* Current AQI card - prominent display */
+    .aqi-current-card {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
+        border: 2px solid rgba(102, 126, 234, 0.3);
+        padding: 40px;
         border-radius: 20px;
-        font-size: 0.9em;
-        margin-top: 10px;
-    }
-    .metric-card {
-        background: #f0f4f8;
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 4px solid #2a5298;
-    }
-    .forecast-card {
-        border-radius: 12px;
-        padding: 20px;
         text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
     }
-    .info-box {
-        background: #e8f4f8;
-        color: #0d3b4f;
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 4px solid #0288d1;
+    
+    .aqi-current-card h2 {
+        margin: 20px 0;
+        color: #ffffff;
+        font-size: 2.5em;
+    }
+    
+    .aqi-value {
+        font-size: 5em;
+        font-weight: 900;
+        margin: 20px 0;
+        text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* Forecast cards - sleek design */
+    .forecast-card {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        border-radius: 20px;
+        padding: 30px;
+        text-align: center;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+        color: #ffffff;
+    }
+    
+    .forecast-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 40px rgba(102, 126, 234, 0.3);
+        border-color: rgba(255, 255, 255, 0.25);
+    }
+    
+    .forecast-card h4 {
+        margin: 0 0 15px 0;
+        font-size: 1.1em;
+        opacity: 0.9;
+        font-weight: 600;
+    }
+    
+    .forecast-aqi {
+        font-size: 3.5em;
+        font-weight: 900;
+        margin: 20px 0;
+    }
+    
+    .forecast-label {
+        font-size: 1.2em;
+        font-weight: 700;
+        margin: 15px 0;
+    }
+    
+    /* Metrics grid */
+    .metric-card {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        padding: 25px;
+        border-radius: 15px;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        color: #ffffff;
+    }
+    
+    .metric-value {
+        font-size: 2em;
+        font-weight: 800;
+        color: #667eea;
         margin: 10px 0;
+    }
+    
+    .metric-label {
+        font-size: 0.9em;
+        opacity: 0.8;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    /* Info/Alert boxes */
+    .info-box {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+        color: #ffffff;
+        padding: 20px;
+        border-radius: 15px;
+        border-left: 5px solid #667eea;
+        margin: 15px 0;
         font-weight: 500;
+        backdrop-filter: blur(10px);
+    }
+    
+    .alert-box-good {
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.1));
+        border-left-color: #22c55e;
+    }
+    
+    .alert-box-warning {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.1));
+        border-left-color: #f59e0b;
+    }
+    
+    .alert-box-danger {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1));
+        border-left-color: #ef4444;
+    }
+    
+    /* Divider */
+    hr {
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        margin: 40px 0;
+    }
+    
+    /* Section headers */
+    h2 {
+        color: #ffffff;
+        font-size: 2em;
+        margin-top: 40px !important;
+        margin-bottom: 20px !important;
+    }
+    
+    h3 {
+        color: #ffffff;
+        margin-bottom: 15px !important;
+    }
+    
+    /* Footer */
+    .footer {
+        text-align: center;
+        padding: 40px 20px;
+        color: #888;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        margin-top: 40px;
+        font-size: 0.9em;
+    }
+    
+    /* Overall text color */
+    .stMarkdown, p, span {
+        color: #ffffff;
+    }
+    
+    /* Plotly charts background */
+    .plotly-container {
+        background: transparent !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
 AQI_LEVELS = [
-    (0, 50, "Good", "#00e400", "Air quality is satisfactory. Perfect for outdoor activities."),
-    (51, 100, "Moderate", "#b8860b", "Sensitive individuals may feel mild discomfort during prolonged outdoor exposure."),
-    (101, 150, "Unhealthy (Sensitive)", "#ff7e00", "Sensitive groups should limit exposure. Consider using masks."),
-    (151, 200, "Unhealthy", "#ff0000", "Everyone may experience health effects. Masks recommended."),
-    (201, 300, "Very Unhealthy", "#8f3f97", "Health alert: serious effects for everyone. Avoid outdoor activity."),
+    (0, 50, "Good", "#22c55e", "Air quality is satisfactory. Perfect for outdoor activities."),
+    (51, 100, "Moderate", "#f59e0b", "Sensitive individuals may feel mild discomfort during prolonged outdoor exposure."),
+    (101, 150, "Unhealthy (Sensitive)", "#ff6b35", "Sensitive groups should limit exposure. Consider using masks."),
+    (151, 200, "Unhealthy", "#ef4444", "Everyone may experience health effects. Masks recommended."),
+    (201, 300, "Very Unhealthy", "#a855f7", "Health alert: serious effects for everyone. Avoid outdoor activity."),
     (301, 500, "Hazardous", "#7e0023", "Emergency conditions. Avoid all outdoor activity immediately."),
 ]
 
@@ -126,30 +276,30 @@ def get_aqi_gauge(value: float) -> go.Figure:
     label, color, _ = classify_aqi(value)
     fig = go.Figure(
         go.Indicator(
-            mode="gauge+number",
+            mode="gauge+number+delta",
             value=value,
             domain={"x": [0, 1], "y": [0, 1]},
-            title={"text": f"<span style='color:#ffffff;'>Current AQI</span><br><span style='font-size:14px;color:{color}'>{label}</span>"},
-            number={"valueformat": ".0f", "font": {"color": "#ffffff"}},
+            title={"text": f"Current AQI<br><span style='font-size:14px;'>{label}</span>"},
+            number={"valueformat": ".0f", "font": {"color": "#ffffff", "size": 40}},
             gauge={
-                "axis": {"range": [0, 300], "tickwidth": 1, "tickcolor": "#666666"},
-                "bar": {"color": color},
+                "axis": {"range": [0, 300], "tickwidth": 1, "tickcolor": "#555555"},
+                "bar": {"color": color, "thickness": 0.2},
                 "steps": [
-                    {"range": [0, 50], "color": "#00e400"},
-                    {"range": [51, 100], "color": "#b8860b"},
-                    {"range": [101, 150], "color": "#ff7e00"},
-                    {"range": [151, 200], "color": "#ff0000"},
-                    {"range": [201, 300], "color": "#8f3f97"},
+                    {"range": [0, 50], "color": "rgba(34, 197, 94, 0.3)"},
+                    {"range": [51, 100], "color": "rgba(245, 158, 11, 0.3)"},
+                    {"range": [101, 150], "color": "rgba(255, 107, 53, 0.3)"},
+                    {"range": [151, 200], "color": "rgba(239, 68, 68, 0.3)"},
+                    {"range": [201, 300], "color": "rgba(168, 85, 247, 0.3)"},
                 ],
             },
         )
     )
     fig.update_layout(
-        height=320, 
-        margin=dict(t=60, b=20), 
-        paper_bgcolor="rgba(0,0,0,0)", 
+        height=380,
+        margin=dict(t=80, b=20, l=20, r=20),
+        paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font={"color": "#ffffff"}
+        font={"color": "#ffffff", "size": 12},
     )
     return fig
 
@@ -232,36 +382,12 @@ def load_forecast():
         latest = df.tail(1)
 
         feature_cols = [
-            "pm25",
-            "pm10",
-            "no2",
-            "co",
-            "o3",
-            "temperature",
-            "humidity",
-            "wind_speed",
-            "pressure",
-            "precipitation",
-            "cloud_cover",
-            "wind_u",
-            "wind_v",
-            "hour_sin",
-            "hour_cos",
-            "month_sin",
-            "month_cos",
-            "dow_sin",
-            "dow_cos",
-            "is_rush_hour",
-            "is_weekend",
-            "aqi_lag_1h",
-            "aqi_lag_3h",
-            "aqi_lag_6h",
-            "aqi_lag_24h",
-            "aqi_change_1h",
-            "aqi_roll_3h",
-            "aqi_roll_6h",
-            "aqi_roll_24h",
-            "aqi_roll_std",
+            "pm25", "pm10", "no2", "co", "o3", "temperature", "humidity",
+            "wind_speed", "pressure", "precipitation", "cloud_cover",
+            "wind_u", "wind_v", "hour_sin", "hour_cos", "month_sin",
+            "month_cos", "dow_sin", "dow_cos", "is_rush_hour", "is_weekend",
+            "aqi_lag_1h", "aqi_lag_3h", "aqi_lag_6h", "aqi_lag_24h",
+            "aqi_change_1h", "aqi_roll_3h", "aqi_roll_6h", "aqi_roll_24h", "aqi_roll_std",
         ]
 
         X = latest[feature_cols]
@@ -277,165 +403,173 @@ def load_forecast():
 
         today = datetime.now()
         return [
-            {"date": (today + timedelta(days=1)).strftime("%A, %b %d"), "aqi": max(0, pred_24)},
-            {"date": (today + timedelta(days=2)).strftime("%A, %b %d"), "aqi": max(0, pred_48)},
-            {"date": (today + timedelta(days=3)).strftime("%A, %b %d"), "aqi": max(0, pred_72)},
+            {"date": (today + timedelta(days=1)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=1)).strftime("%A, %B %d"), "aqi": max(0, pred_24)},
+            {"date": (today + timedelta(days=2)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=2)).strftime("%A, %B %d"), "aqi": max(0, pred_48)},
+            {"date": (today + timedelta(days=3)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=3)).strftime("%A, %B %d"), "aqi": max(0, pred_72)},
         ]
     except Exception as exc:
-        st.warning(f"Could not load live model predictions. Showing sample data. ({exc})")
+        st.warning(f"Could not load live model predictions. ({exc})")
         today = datetime.now()
         return [
-            {"date": (today + timedelta(days=1)).strftime("%A, %b %d"), "aqi": 145},
-            {"date": (today + timedelta(days=2)).strftime("%A, %b %d"), "aqi": 130},
-            {"date": (today + timedelta(days=3)).strftime("%A, %b %d"), "aqi": 110},
+            {"date": (today + timedelta(days=1)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=1)).strftime("%A, %B %d"), "aqi": 145},
+            {"date": (today + timedelta(days=2)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=2)).strftime("%A, %B %d"), "aqi": 130},
+            {"date": (today + timedelta(days=3)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=3)).strftime("%A, %B %d"), "aqi": 110},
         ]
 
 
 def main():
-    # Custom header banner
+    # Header
     st.markdown("""
         <div class="header-banner">
             <h1>💨 Islamabad AQI Predictor</h1>
-            <p>Real-time Air Quality Forecasting for Islamabad, Pakistan</p>
+            <p>Real-time Air Quality Forecasting & 72-Hour Predictions</p>
             <div class="developer-tag">🔬 Developed by Zeeshan</div>
         </div>
     """, unsafe_allow_html=True)
 
-    with st.spinner("🔄 Loading real-time AQI data for Islamabad..."):
+    with st.spinner("🔄 Loading real-time data..."):
         current = load_current_aqi()
         forecast = load_forecast()
 
     label, color, advice = classify_aqi(current["aqi"])
 
-    # Current AQI Section
-    st.subheader("📊 Current Air Quality Status")
-    
-    col_gauge, col_info = st.columns([1, 1.2])
+    # Current AQI - Prominent Display
+    st.markdown("### 📊 Current Air Quality")
+    col_gauge, col_info = st.columns([1.2, 1])
     
     with col_gauge:
         st.plotly_chart(get_aqi_gauge(current["aqi"]), use_container_width=True)
     
     with col_info:
-        st.markdown(f"### {label}")
-        st.markdown(f"<div class='info-box'>{advice}</div>", unsafe_allow_html=True)
-        
-        if current.get('updated'):
-            st.caption(f"📅 Last updated: {current.get('updated')}")
+        st.markdown(f"""
+            <div class="aqi-current-card">
+                <h2>{label}</h2>
+                <div class="aqi-value" style="color: {color};">{current['aqi']:.0f}</div>
+                <div class="info-box" style="margin-top: 20px; border-left-color: {color};">
+                    {advice}
+                </div>
+                <p style="margin-top: 20px; opacity: 0.7; font-size: 0.9em;">
+                    📅 {current.get('updated', 'Recently updated')}
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
-    # Pollutants & Weather Metrics
-    st.subheader("🌡️ Environmental Metrics")
-    m1, m2, m3, m4 = st.columns(4)
+    st.markdown("---")
+
+    # Environmental Metrics
+    st.markdown("### 🌡️ Air & Weather Conditions")
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
     
-    with m1:
-        st.metric("PM2.5", f"{current['pm25']:.1f} µg/m³", delta="Fine Particulates")
-    with m2:
-        st.metric("PM10", f"{current['pm10']:.1f} µg/m³", delta="Coarse Particulates")
-    with m3:
-        st.metric("NO₂", f"{current['no2']:.1f} ppb", delta="Nitrogen Dioxide")
-    with m4:
-        st.metric("Temperature", f"{current['temperature']:.1f}°C", delta="Current Temp")
-
-    st.divider()
-
-    # 3-Day Forecast Section
-    st.subheader("📈 72-Hour AQI Forecast")
-    st.markdown("*Predictions for the next 3 days based on ML models trained on Islamabad data*")
+    metrics = [
+        (m1, "PM2.5", f"{current['pm25']:.1f}", "µg/m³"),
+        (m2, "PM10", f"{current['pm10']:.1f}", "µg/m³"),
+        (m3, "NO₂", f"{current['no2']:.1f}", "ppb"),
+        (m4, "🌡️ Temp", f"{current['temperature']:.1f}", "°C"),
+        (m5, "💧 RH", f"{current['humidity']:.0f}", "%"),
+        (m6, "💨 Wind", f"{current['wind']:.1f}", "m/s"),
+    ]
     
-    cols = st.columns(3, gap="medium")
-    for i, day in enumerate(forecast):
-        lbl, clr, day_advice = classify_aqi(day["aqi"])
-        with cols[i]:
+    for col, label, value, unit in metrics:
+        with col:
             st.markdown(f"""
-                <div class="forecast-card" style="background: linear-gradient(135deg, {clr}20, {clr}40); border: 2px solid {clr};">
-                    <h4 style="margin: 0; color: #f5f5f5;">{day['date']}</h4>
-                    <div style="font-size: 48px; font-weight: bold; color: {clr}; margin: 15px 0;">
-                        {day['aqi']:.0f}
-                    </div>
-                    <p style="margin: 0; color: {clr}; font-weight: 600;">{lbl}</p>
-                    <p style="margin: 10px 0 0 0; font-size: 0.85em; color: #d8d8d8;">{day_advice[:50]}...</p>
+                <div class="metric-card">
+                    <div class="metric-label">{label}</div>
+                    <div class="metric-value">{value}</div>
+                    <div style="font-size: 0.85em; opacity: 0.7;">{unit}</div>
                 </div>
             """, unsafe_allow_html=True)
 
-    st.divider()
+    st.markdown("---")
 
-    # Chart Section
-    st.subheader("📉 Forecast Trend Analysis")
-    forecast_df = pd.DataFrame(forecast)
+    # 72-Hour Forecast
+    st.markdown("### 📈 3-Day AQI Forecast")
+    st.markdown("*Predictions automatically update daily with new data*")
+    
+    cols = st.columns(3, gap="large")
+    for i, day in enumerate(cols):
+        forecast_data = forecast[i]
+        lbl, clr, day_advice = classify_aqi(forecast_data["aqi"])
+        
+        with day:
+            st.markdown(f"""
+                <div class="forecast-card" style="border-color: {clr}40;">
+                    <h4>{forecast_data['full_date']}</h4>
+                    <div class="forecast-aqi" style="color: {clr};">{forecast_data['aqi']:.0f}</div>
+                    <div class="forecast-label" style="color: {clr};">{lbl}</div>
+                    <p style="margin: 15px 0 0 0; font-size: 0.85em; opacity: 0.8;">
+                        {day_advice[:60]}
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # Forecast Chart
+    st.markdown("### 📉 Prediction Trend")
+    forecast_df = pd.DataFrame([{"Date": d["full_date"], "AQI": d["aqi"]} for d in forecast])
+    
     fig = px.bar(
         forecast_df,
-        x="date",
-        y="aqi",
-        color="aqi",
-        color_continuous_scale=["#00e400", "#b8860b", "#ff7e00", "#ff0000", "#8f3f97"],
+        x="Date",
+        y="AQI",
+        color="AQI",
+        color_continuous_scale=["#22c55e", "#f59e0b", "#ff6b35", "#ef4444", "#a855f7"],
         range_color=[0, 300],
-        labels={"aqi": "Predicted AQI", "date": "Date"},
-        title="Next 3 Days - AQI Predictions with Health Thresholds",
-        height=400
+        height=400,
+        title="Next 72 Hours - Predicted AQI Values with Health Thresholds"
     )
-    fig.add_hline(
-        y=100,
-        line_dash="dash",
-        line_color="orange",
-        line_width=2,
-        annotation_text="Moderate Threshold (100)",
-        annotation_position="right"
-    )
-    fig.add_hline(
-        y=150,
-        line_dash="dash",
-        line_color="red",
-        line_width=2,
-        annotation_text="Unhealthy Threshold (150)",
-        annotation_position="right"
-    )
+    
+    fig.add_hline(y=100, line_dash="dash", line_color="#f59e0b", line_width=2,
+                  annotation_text="Moderate (100)", annotation_position="right")
+    fig.add_hline(y=150, line_dash="dash", line_color="#ef4444", line_width=2,
+                  annotation_text="Unhealthy (150)", annotation_position="right")
+    
     fig.update_layout(
         hovermode="x unified",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(240,244,248,0.5)"
+        paper_bgcolor="rgba(15, 12, 41, 0.5)",
+        plot_bgcolor="rgba(255, 255, 255, 0.05)",
+        font={"color": "#ffffff"},
+        xaxis={"showgrid": False},
+        yaxis={"showgrid": True, "gridwidth": 1, "gridcolor": "rgba(255, 255, 255, 0.1)"},
     )
+    
     st.plotly_chart(fig, use_container_width=True)
 
-    st.divider()
-
-    # Feature Importance Section
-    if os.path.exists("artifacts/shap_summary.png"):
-        st.subheader("🔍 Model Feature Importance (SHAP Analysis)")
-        st.markdown("*These features have the strongest influence on our AQI predictions*")
-        col1, col2, col3 = st.columns([0.5, 3, 0.5])
-        with col2:
-            st.image("artifacts/shap_summary.png", caption="SHAP Summary Plot - Feature Impact on Predictions", use_container_width=True)
-
-    st.divider()
+    st.markdown("---")
 
     # Health Alerts
-    st.subheader("⚠️ Health Alerts & Recommendations")
+    st.markdown("### ⚠️ Health Alerts & Recommendations")
     
-    if any(d["aqi"] > 150 for d in forecast):
-        st.error(
-            "🚨 **ALERT**: Unhealthy air quality forecasted in the next 3 days. "
-            "Avoid outdoor activities, use N95 masks, and keep windows closed."
-        )
-    elif any(d["aqi"] > 100 for d in forecast):
-        st.warning(
-            "⚠️ **CAUTION**: Moderate to unhealthy air quality expected. "
-            "Sensitive groups (children, elderly, asthmatics) should limit outdoor exposure."
-        )
+    max_forecast = max(d["aqi"] for d in forecast)
+    
+    if max_forecast > 150:
+        alert_class = "alert-box-danger"
+        alert_msg = "🚨 **UNHEALTHY CONDITIONS FORECASTED** - Avoid outdoor activities, use N95 masks, keep windows closed."
+    elif max_forecast > 100:
+        alert_class = "alert-box-warning"
+        alert_msg = "⚠️ **MODERATE TO UNHEALTHY CONDITIONS** - Sensitive groups should limit outdoor exposure. Consider masks."
     else:
-        st.success(
-            "✅ **GOOD NEWS**: Air quality is expected to remain good. "
-            "Outdoor activities should be safe for most people."
-        )
+        alert_class = "alert-box-good"
+        alert_msg = "✅ **GOOD AIR QUALITY** - Outdoor activities should be safe for most people."
+    
+    st.markdown(f'<div class="info-box {alert_class}">{alert_msg}</div>', unsafe_allow_html=True)
 
-    st.divider()
+    if os.path.exists("artifacts/shap_summary.png"):
+        st.markdown("---")
+        st.markdown("### 🔍 AI Model Explainability (SHAP)")
+        st.markdown("*How different factors influence our AQI predictions*")
+        st.image("artifacts/shap_summary.png", caption="Feature Importance Analysis", use_container_width=True)
+
+    st.markdown("---")
 
     # Footer
     st.markdown("""
-        <div style='text-align: center; padding: 20px; color: #666; border-top: 1px solid #eee;'>
-            <p><strong>Islamabad AQI Predictor</strong> | Developed by Zeeshan</p>
-            <p style='font-size: 0.85em;'>
-                Data Sources: AQICN (Ground Sensors) | Open-Meteo (Weather & Climate) | 
-                Hopsworks (Feature Store & Model Registry)<br>
-                ML Models: Random Forest & Ridge Regression | Explainability: SHAP
+        <div class="footer">
+            <p><strong>Islamabad AQI Predictor</strong> | AI-Powered Environmental Intelligence</p>
+            <p>
+                📡 Data: AQICN (Ground Sensors) | Open-Meteo (Weather) | Hopsworks (ML Feature Store)<br>
+                🤖 Models: Random Forest, Ridge Regression | 📊 Explainability: SHAP Values<br>
+                👨‍💻 Developed by Zeeshan | Updated Daily at 2 AM UTC
             </p>
         </div>
     """, unsafe_allow_html=True)
