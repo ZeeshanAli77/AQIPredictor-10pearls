@@ -189,12 +189,12 @@ def store_features(feature_row: dict):
         df[col] = pd.to_numeric(df[col], errors="coerce").round(0)
         df[col] = df[col].apply(lambda v: int(v) if pd.notna(v) else None)
     fg.insert(
-        df,
-        write_options={
-            "wait_for_job": True,
-            "start_offline_materialization": True,
-        },
-    )
+    df,
+    write_options={
+        "wait_for_job": False,
+        "start_offline_materialization": False,
+    },
+)
     print(f"[OK] Features stored to Hopsworks at {feature_row['timestamp']}")
 
 
