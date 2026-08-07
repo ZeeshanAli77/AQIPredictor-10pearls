@@ -74,6 +74,19 @@ def extract_pollutants(aqicn_data: dict) -> dict:
             return np.nan
 
     iaqi = aqicn_data.get("iaqi", {})
+    
+    # DEBUG: Log what AQICN actually returned
+    print("\n" + "="*60)
+    print("[DEBUG] AQICN API Response")
+    print("="*60)
+    print(f"AQI value: {aqicn_data.get('aqi', 'MISSING')}")
+    print(f"Available pollutants (iaqi keys): {list(iaqi.keys())}")
+    print("Pollutant values:")
+    for pollutant in ["pm25", "pm10", "no2", "co", "o3", "so2"]:
+        value = iaqi.get(pollutant, {}).get("v", "MISSING")
+        print(f"  {pollutant}: {value}")
+    print("="*60 + "\n")
+    
     return {
         "aqi": to_float(aqicn_data.get("aqi", np.nan)),
         "pm25": to_float(iaqi.get("pm25", {}).get("v", np.nan)),
