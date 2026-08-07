@@ -1,9 +1,9 @@
 city:
   name: "Islamabad"
   country: "Pakistan"
-  latitude: 33.7298          # ✅ Islamabad/Rawalpindi
-  longitude: 73.1772         # ✅ Islamabad/Rawalpindi
-  aqicn_station: "@518566"   # ✅ Main Islamabad station
+  latitude: 33.7298
+  longitude: 73.1772
+  aqicn_station: "@511588"   # ✅ SSPL, Islamabad (working station)
 
 feature_store:
   project_name: "zeeshanproject"
