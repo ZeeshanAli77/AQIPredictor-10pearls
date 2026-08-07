@@ -3,7 +3,7 @@ city:
   country: "Pakistan"
   latitude: 33.7298
   longitude: 73.1772
-  aqicn_station: "@511588"   # ✅ SSPL, Islamabad (working station)
+  aqicn_station: "islamabad"   # Just the city name
 
 feature_store:
   project_name: "zeeshanproject"
