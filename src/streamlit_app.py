@@ -264,6 +264,7 @@ def get_secret(name: str) -> str:
         print(f"✗ st.secrets failed for {name}, got from env: {value[:20] if value and len(value) > 20 else value}... (error: {e})")
         return value
 
+
 def classify_aqi(value: float) -> tuple:
     try:
         numeric = round(float(value))
@@ -341,83 +342,276 @@ def load_current_aqi():
         "updated": data.get("time", {}).get("s", ""),
     }
 
-@st.cache_data(ttl=3600)
-def load_forecast():
-    try:
-        project = hopsworks.login(
-            
-            
-            api_key_value=get_secret("HOPSWORKS_API_KEY")
+def get_hopsworks_project():
+    """Cache the Hopsworks project connection"""
+    return hopsworks.login(
+        api_key_value=get_secret("HOPSWORKS_API_KEY"),
+        project=get_secret("HOPSWORKS_PROJECT_NAME"),
+        host=get_secret("HOPSWORKS_HOST")
+    )
+
+def get_hopsworks_models(project):
+    """Load the trained models from Hopsworks Model Registry"""
+
+    mr = project.get_model_registry()
+
+    model_24 = mr.get_best_model(
+        "aqi_predictor_target_aqi_24h",
+        metric="rmse",
+        direction="min"
+    )
+
+    saved_model_dir_24 = model_24.download()
+
+    clf_24 = joblib.load(
+        os.path.join(
+            saved_model_dir_24,
+            "aqi_target_aqi_24h_model.pkl"
         )
-        mr = project.get_model_registry()
-        
-        # Load 24h model
-        model_24 = mr.get_best_model("aqi_predictor_target_aqi_24h", metric="rmse", direction="min")
-        saved_model_dir_24 = model_24.download()
-        clf_24 = joblib.load(os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_model.pkl"))
+    )
 
-        # Load 48h model
-        model_48 = mr.get_best_model("aqi_predictor_target_aqi_48h", metric="rmse", direction="min")
-        saved_model_dir_48 = model_48.download()
-        clf_48 = joblib.load(os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_model.pkl"))
+    model_48 = mr.get_best_model(
+        "aqi_predictor_target_aqi_48h",
+        metric="rmse",
+        direction="min"
+    )
 
-        # Load 72h model
-        model_72 = mr.get_best_model("aqi_predictor_target_aqi_72h", metric="rmse", direction="min")
-        saved_model_dir_72 = model_72.download()
-        clf_72 = joblib.load(os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_model.pkl"))
+    saved_model_dir_48 = model_48.download()
+
+    clf_48 = joblib.load(
+        os.path.join(
+            saved_model_dir_48,
+            "aqi_target_aqi_48h_model.pkl"
+        )
+    )
+
+    model_72 = mr.get_best_model(
+        "aqi_predictor_target_aqi_72h",
+        metric="rmse",
+        direction="min"
+    )
+
+    saved_model_dir_72 = model_72.download()
+
+    clf_72 = joblib.load(
+        os.path.join(
+            saved_model_dir_72,
+            "aqi_target_aqi_72h_model.pkl"
+        )
+    )
+
+    return clf_24, clf_48, clf_72
+
+
+def load_forecast():
+    """Load 3-day AQI forecast from Hopsworks models"""
+    try:
+        project = get_hopsworks_project()
+        clf_24, clf_48, clf_72 = get_hopsworks_models(project)
 
         fs = project.get_feature_store()
         fg = fs.get_feature_group("aqi_features", version=7)
-        df = fg.read(online=True)
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+        df = fg.read()
+
+        df["timestamp"] = pd.to_datetime(
+            df["timestamp"],
+            utc=True,
+            errors="coerce"
+        )
+
         df = df.sort_values("timestamp")
+
         if len(df) < 25:
-            raise RuntimeError("Not enough history to compute lag features.")
-        df["aqi"] = pd.to_numeric(df["aqi"], errors="coerce")
+            raise RuntimeError(
+                "Not enough history to compute lag features."
+            )
+
+        df["aqi"] = pd.to_numeric(
+            df["aqi"],
+            errors="coerce"
+        )
+
+        # Create lag features
         df["aqi_lag_1h"] = df["aqi"].shift(1)
         df["aqi_lag_3h"] = df["aqi"].shift(3)
         df["aqi_lag_6h"] = df["aqi"].shift(6)
         df["aqi_lag_24h"] = df["aqi"].shift(24)
-        df["aqi_change_1h"] = df["aqi"] - df["aqi_lag_1h"]
-        df["aqi_roll_3h"] = df["aqi"].rolling(3).mean()
-        df["aqi_roll_6h"] = df["aqi"].rolling(6).mean()
-        df["aqi_roll_24h"] = df["aqi"].rolling(24).mean()
-        df["aqi_roll_std"] = df["aqi"].rolling(6).std()
+
+        # Create derived features
+        df["aqi_change_1h"] = (
+            df["aqi"] - df["aqi_lag_1h"]
+        )
+
+        df["aqi_roll_3h"] = (
+            df["aqi"].rolling(3).mean()
+        )
+
+        df["aqi_roll_6h"] = (
+            df["aqi"].rolling(6).mean()
+        )
+
+        df["aqi_roll_24h"] = (
+            df["aqi"].rolling(24).mean()
+        )
+
+        df["aqi_roll_std"] = (
+            df["aqi"].rolling(6).std()
+        )
+
+        # Get latest available data
         latest = df.tail(1)
 
         feature_cols = [
-            "pm25", "pm10", "no2", "co", "o3", "temperature", "humidity",
-            "wind_speed", "pressure", "precipitation", "cloud_cover",
-            "wind_u", "wind_v", "hour_sin", "hour_cos", "month_sin",
-            "month_cos", "dow_sin", "dow_cos", "is_rush_hour", "is_weekend",
-            "aqi_lag_1h", "aqi_lag_3h", "aqi_lag_6h", "aqi_lag_24h",
-            "aqi_change_1h", "aqi_roll_3h", "aqi_roll_6h", "aqi_roll_24h", "aqi_roll_std",
+            "pm25",
+            "pm10",
+            "no2",
+            "co",
+            "o3",
+            "temperature",
+            "humidity",
+            "wind_speed",
+            "pressure",
+            "precipitation",
+            "cloud_cover",
+            "wind_u",
+            "wind_v",
+            "hour_sin",
+            "hour_cos",
+            "month_sin",
+            "month_cos",
+            "dow_sin",
+            "dow_cos",
+            "is_rush_hour",
+            "is_weekend",
+            "aqi_lag_1h",
+            "aqi_lag_3h",
+            "aqi_lag_6h",
+            "aqi_lag_24h",
+            "aqi_change_1h",
+            "aqi_roll_3h",
+            "aqi_roll_6h",
+            "aqi_roll_24h",
+            "aqi_roll_std",
         ]
 
         X = latest[feature_cols]
+
+        # Handle missing values
         if X.isna().any(axis=None):
             valid = df[feature_cols].dropna()
+
             if valid.empty:
-                raise RuntimeError("Latest features contain NaNs; check history.")
+                raise RuntimeError(
+                    "Latest features contain NaNs; check history."
+                )
+
             X = valid.tail(1)
-            
-        pred_24 = float(clf_24.predict(X)[0])
-        pred_48 = float(clf_48.predict(X)[0])
-        pred_72 = float(clf_72.predict(X)[0])
+
+        # Make predictions
+        pred_24 = float(
+            clf_24.predict(X)[0]
+        )
+
+        pred_48 = float(
+            clf_48.predict(X)[0]
+        )
+
+        pred_72 = float(
+            clf_72.predict(X)[0]
+        )
+
+        # Debug information
+        print("===== AQI FORECAST DEBUG =====")
+        print(
+            "Latest timestamp:",
+            latest["timestamp"].iloc[0]
+        )
+        print(
+            "Latest actual AQI:",
+            latest["aqi"].iloc[0]
+        )
+        print(
+            "24h prediction:",
+            pred_24
+        )
+        print(
+            "48h prediction:",
+            pred_48
+        )
+        print(
+            "72h prediction:",
+            pred_72
+        )
+        print("==============================")
+
+        # Generate forecast dates
+        today = datetime.now()
+
+        return [
+            {
+                "date": (
+                    today + timedelta(days=1)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=1)
+                ).strftime("%A, %B %d"),
+                "aqi": max(0, pred_24),
+            },
+            {
+                "date": (
+                    today + timedelta(days=2)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=2)
+                ).strftime("%A, %B %d"),
+                "aqi": max(0, pred_48),
+            },
+            {
+                "date": (
+                    today + timedelta(days=3)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=3)
+                ).strftime("%A, %B %d"),
+                "aqi": max(0, pred_72),
+            },
+        ]
+
+    except Exception as exc:
+        st.warning(
+            f"Could not load live model predictions. ({exc})"
+        )
 
         today = datetime.now()
+
         return [
-            {"date": (today + timedelta(days=1)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=1)).strftime("%A, %B %d"), "aqi": max(0, pred_24)},
-            {"date": (today + timedelta(days=2)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=2)).strftime("%A, %B %d"), "aqi": max(0, pred_48)},
-            {"date": (today + timedelta(days=3)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=3)).strftime("%A, %B %d"), "aqi": max(0, pred_72)},
-        ]
-    except Exception as exc:
-        st.warning(f"Could not load live model predictions. ({exc})")
-        today = datetime.now()
-        return [
-            {"date": (today + timedelta(days=1)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=1)).strftime("%A, %B %d"), "aqi": 145},
-            {"date": (today + timedelta(days=2)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=2)).strftime("%A, %B %d"), "aqi": 130},
-            {"date": (today + timedelta(days=3)).strftime("%a, %b %d"), "full_date": (today + timedelta(days=3)).strftime("%A, %B %d"), "aqi": 110},
+            {
+                "date": (
+                    today + timedelta(days=1)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=1)
+                ).strftime("%A, %B %d"),
+                "aqi": 145,
+            },
+            {
+                "date": (
+                    today + timedelta(days=2)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=2)
+                ).strftime("%A, %B %d"),
+                "aqi": 130,
+            },
+            {
+                "date": (
+                    today + timedelta(days=3)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=3)
+                ).strftime("%A, %B %d"),
+                "aqi": 110,
+            },
         ]
 
 
@@ -425,6 +619,7 @@ def main():
     # Clear cache button
     if st.sidebar.button("🔄 Clear Cache & Reload Models"):
         st.cache_data.clear()
+        st.cache_resource.clear()
         st.rerun()
     
     # Header
@@ -435,6 +630,7 @@ def main():
             <div class="developer-tag">🔬 Developed by Zeeshan</div>
         </div>
     """, unsafe_allow_html=True)
+    
     with st.spinner("🔄 Loading real-time data..."):
         current = load_current_aqi()
         forecast = load_forecast()
