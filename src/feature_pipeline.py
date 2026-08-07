@@ -1,6 +1,7 @@
 """
 Feature Pipeline: Fetch, compute, and store AQI features for Islamabad/Rawalpindi.
 Runs every hour via GitHub Actions.
+Uses Open-Meteo Air Quality API (matches training data backfill source).
 """
 
 from __future__ import annotations
@@ -32,21 +33,19 @@ CONFIG = load_config()
 CITY = CONFIG["city"]
 LAT, LON = CITY["latitude"], CITY["longitude"]
 
-AQICN_TOKEN = os.getenv("AQICN_TOKEN", "")
 HOPSWORKS_API_KEY = os.getenv("HOPSWORKS_API_KEY", "")
 
 
-def fetch_aqicn_data(station: str) -> dict:
-    """Fetch real-time AQI data from AQICN API for a given station."""
-    if not AQICN_TOKEN:
-        raise RuntimeError("AQICN_TOKEN is missing. Set it in your environment.")
-    url = f"https://api.waqi.info/feed/{station}/?token={AQICN_TOKEN}"
+def fetch_aqi_data(lat: float, lon: float) -> dict:
+    """Fetch current air quality data from Open-Meteo Air Quality API (no API key needed)."""
+    url = (
+        "https://air-quality-api.open-meteo.com/v1/air-quality"
+        f"?latitude={lat}&longitude={lon}"
+        "&current=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,ozone,dust,european_aqi"
+    )
     response = requests.get(url, timeout=30)
     response.raise_for_status()
-    data = response.json()
-    if data.get("status") != "ok":
-        raise ValueError(f"AQICN API error: {data.get('data', 'Unknown error')}")
-    return data["data"]
+    return response.json()["current"]
 
 
 def fetch_weather_data(lat: float, lon: float) -> dict:
@@ -63,8 +62,8 @@ def fetch_weather_data(lat: float, lon: float) -> dict:
     return response.json()["current"]
 
 
-def extract_pollutants(aqicn_data: dict) -> dict:
-    """Extract pollutant readings from AQICN response."""
+def extract_pollutants(aqi_data: dict) -> dict:
+    """Extract pollutant readings from Open-Meteo Air Quality response."""
     def to_float(value) -> float:
         if value in (None, "-", ""):
             return np.nan
@@ -73,28 +72,29 @@ def extract_pollutants(aqicn_data: dict) -> dict:
         except (TypeError, ValueError):
             return np.nan
 
-    iaqi = aqicn_data.get("iaqi", {})
-    
-    # DEBUG: Log what AQICN actually returned
+    # DEBUG: Log what API returned
     print("\n" + "="*60)
-    print("[DEBUG] AQICN API Response")
+    print("[DEBUG] Open-Meteo Air Quality API Response")
     print("="*60)
-    print(f"AQI value: {aqicn_data.get('aqi', 'MISSING')}")
-    print(f"Available pollutants (iaqi keys): {list(iaqi.keys())}")
+    print(f"Available keys: {list(aqi_data.keys())}")
     print("Pollutant values:")
-    for pollutant in ["pm25", "pm10", "no2", "co", "o3", "so2"]:
-        value = iaqi.get(pollutant, {}).get("v", "MISSING")
-        print(f"  {pollutant}: {value}")
+    print(f"  pm25 (pm2_5): {aqi_data.get('pm2_5', 'MISSING')}")
+    print(f"  pm10: {aqi_data.get('pm10', 'MISSING')}")
+    print(f"  no2 (nitrogen_dioxide): {aqi_data.get('nitrogen_dioxide', 'MISSING')}")
+    print(f"  co (carbon_monoxide): {aqi_data.get('carbon_monoxide', 'MISSING')}")
+    print(f"  o3 (ozone): {aqi_data.get('ozone', 'MISSING')}")
+    print(f"  so2 (dust): {aqi_data.get('dust', 'MISSING')}")
+    print(f"  aqi (european_aqi): {aqi_data.get('european_aqi', 'MISSING')}")
     print("="*60 + "\n")
     
     return {
-        "aqi": to_float(aqicn_data.get("aqi", np.nan)),
-        "pm25": to_float(iaqi.get("pm25", {}).get("v", np.nan)),
-        "pm10": to_float(iaqi.get("pm10", {}).get("v", np.nan)),
-        "no2": to_float(iaqi.get("no2", {}).get("v", np.nan)),
-        "co": to_float(iaqi.get("co", {}).get("v", np.nan)),
-        "o3": to_float(iaqi.get("o3", {}).get("v", np.nan)),
-        "so2": to_float(iaqi.get("so2", {}).get("v", np.nan)),
+        "aqi": to_float(aqi_data.get("european_aqi", np.nan)),
+        "pm25": to_float(aqi_data.get("pm2_5", np.nan)),
+        "pm10": to_float(aqi_data.get("pm10", np.nan)),
+        "no2": to_float(aqi_data.get("nitrogen_dioxide", np.nan)),
+        "co": to_float(aqi_data.get("carbon_monoxide", np.nan)),
+        "o3": to_float(aqi_data.get("ozone", np.nan)),
+        "so2": to_float(aqi_data.get("dust", np.nan)),
     }
 
 
@@ -215,9 +215,9 @@ def run_feature_pipeline():
     timestamp = datetime.now(timezone.utc)
 
     try:
-        print("Fetching AQICN data...")
-        aqicn_raw = fetch_aqicn_data(CITY["aqicn_station"])
-        pollutants = extract_pollutants(aqicn_raw)
+        print("Fetching air quality data from Open-Meteo...")
+        aqi_raw = fetch_aqi_data(LAT, LON)
+        pollutants = extract_pollutants(aqi_raw)
 
         print("Fetching weather data...")
         weather = fetch_weather_data(LAT, LON)
@@ -225,9 +225,7 @@ def run_feature_pipeline():
         print("Computing features...")
         features = compute_features(pollutants, weather, timestamp)
 
-        # Try to store in Hopsworks, but don't fail the pipeline if it doesn't work
-        print("Storing features in Hopsworks...")
-       # Try to store in Hopsworks, but don't fail the pipeline if it doesn't work
+        # Try to store in Hopsworks
         print("Storing features in Hopsworks...")
         try:
             store_features(features)
