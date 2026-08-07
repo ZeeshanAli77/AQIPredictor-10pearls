@@ -174,13 +174,14 @@ def store_features(feature_row: dict):
     fs = project.get_feature_store()
 
     fg = fs.get_or_create_feature_group(
-        name=CONFIG["feature_store"]["feature_group_name"],
-        version=CONFIG["feature_store"]["feature_group_version"],
-        description="Hourly AQI and weather features for Islamabad/Rawalpindi",
-        primary_key=["city", "timestamp"],
-        event_time="timestamp",
-        online_enabled=True,
-    )
+    name=CONFIG["feature_store"]["feature_group_name"],
+    version=CONFIG["feature_store"]["feature_group_version"],
+    description="Hourly AQI and weather features for Islamabad/Rawalpindi",
+    primary_key=["city", "timestamp"],
+    event_time="timestamp",
+    online_enabled=True,
+    time_travel_format="HUDI",  # ← Add this line
+)
 
     df = pd.DataFrame([feature_row])
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
