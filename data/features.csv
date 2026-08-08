@@ -1,3 +1,4 @@
 timestamp,city,aqi,pm25,pm10,no2,co,o3,so2,temperature,humidity,wind_speed,wind_direction,pressure,precipitation,cloud_cover,wind_u,wind_v,hour,day_of_week,month,day_of_year,hour_sin,hour_cos,month_sin,month_cos,dow_sin,dow_cos,is_rush_hour,is_weekend
 2026-08-07 23:50:12.241581+00:00,islamabad_rawalpindi,62.0,40.6,42.1,53.5,661.0,7.0,3.0,23.6,85,2.8,45,939.8,0.0,0,-1.9799,-1.9799,23,4,8,219,-0.2588,0.9659,-0.866,-0.5,-0.4339,-0.901,0,0
 2026-08-08 00:48:50.023215+00:00,islamabad_rawalpindi,63.0,39.5,41.0,47.5,583.0,17.0,3.0,24.1,86,3.5,35,939.8,0.0,0,-2.0075,-2.867,0,5,8,220,0.0,1.0,-0.866,-0.5,-0.9749,-0.2225,0,1
+2026-08-08 01:01:25.917561+00:00,islamabad_rawalpindi,63.0,38.5,40.0,40.8,602.0,48.0,4.0,24.3,85,3.1,31,939.9,0.0,0,-1.5966,-2.6572,1,5,8,220,0.2588,0.9659,-0.866,-0.5,-0.9749,-0.2225,0,1
