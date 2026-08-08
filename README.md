@@ -20,7 +20,7 @@ This project operationalizes a solution: a fully automated ML system that predic
 
 ---
 
-## How It Actually Works (In Plain English)
+## How It Actually Works 
 
 Every hour, the system wakes up and does this:
 
