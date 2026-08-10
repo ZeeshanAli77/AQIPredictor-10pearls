@@ -1,4 +1,4 @@
-# AQI Predictor: Serverless Air Quality Forecasting for Islamabad 
+# AQI Predictor: Serverless Air Quality Forecasting for Islamabad & Rawalpindi
 
 **By Zeeshan Ali Syed** | 10 Pearls Shine Internship Program (Cohort 9, Data Sciences)
 
