@@ -344,11 +344,10 @@ def load_current_aqi():
 
 def get_hopsworks_project():
     """Cache the Hopsworks project connection"""
-    connection = hopsworks.login(
+    return hopsworks.login(
         api_key_value=get_secret("HOPSWORKS_API_KEY"),
         host=get_secret("HOPSWORKS_HOST")
     )
-    return connection.get_project(get_secret("HOPSWORKS_PROJECT_NAME"))
 
 def get_hopsworks_models(project):
     """Load the trained models from Hopsworks Model Registry"""
