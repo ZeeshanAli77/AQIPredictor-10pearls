@@ -402,19 +402,6 @@ def get_hopsworks_models(project):
     return clf_24, clf_48, clf_72
 
 
-def fix_scaled_prediction(pred):
-    """
-    Auto-detect and correct StandardScaler output.
-    If prediction is in scaled range [0-20], inverse-transform it back to AQI range.
-    Assumes StandardScaler(mean≈65, std≈25) was used on target.
-    """
-    if 0 <= pred < 20:  # Suspiciously small = likely scaled
-        # Inverse: x = (scaled * std) + mean
-        pred = (pred * 25) + 65
-    # Clamp to valid AQI range [0-300]
-    return max(0, min(300, pred))
-
-
 def load_forecast():
     """Load 3-day AQI forecast from Hopsworks models"""
     try:
@@ -519,15 +506,18 @@ def load_forecast():
 
             X = valid.tail(1)
 
-        # Make predictions and apply correction
-        pred_24_raw = float(clf_24.predict(X)[0])
-        pred_48_raw = float(clf_48.predict(X)[0])
-        pred_72_raw = float(clf_72.predict(X)[0])
+        # Make predictions
+        pred_24 = float(
+            clf_24.predict(X)[0]
+        )
 
-        # Apply auto-correction for scaled predictions
-        pred_24 = fix_scaled_prediction(pred_24_raw)
-        pred_48 = fix_scaled_prediction(pred_48_raw)
-        pred_72 = fix_scaled_prediction(pred_72_raw)
+        pred_48 = float(
+            clf_48.predict(X)[0]
+        )
+
+        pred_72 = float(
+            clf_72.predict(X)[0]
+        )
 
         # Debug information
         print("===== AQI FORECAST DEBUG =====")
@@ -540,13 +530,16 @@ def load_forecast():
             latest["aqi"].iloc[0]
         )
         print(
-            f"24h prediction: {pred_24_raw} → {pred_24}"
+            "24h prediction:",
+            pred_24
         )
         print(
-            f"48h prediction: {pred_48_raw} → {pred_48}"
+            "48h prediction:",
+            pred_48
         )
         print(
-            f"72h prediction: {pred_72_raw} → {pred_72}"
+            "72h prediction:",
+            pred_72
         )
         print("==============================")
 
