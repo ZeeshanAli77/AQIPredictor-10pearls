@@ -6,5 +6,5 @@ joblib==1.4.0
 requests==2.31.0
 pyyaml==6.0
 python-dotenv==1.0.1
-hopsworks==4.2.10
-hsfs==3.4.8
+hopsworks==4.3.0
+hsfs==3.2.0
