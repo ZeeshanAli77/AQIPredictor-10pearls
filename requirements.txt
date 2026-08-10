@@ -7,4 +7,4 @@ requests==2.31.0
 pyyaml==6.0
 python-dotenv==1.0.1
 hopsworks>=5.0.0,<6.0.0
-hsfs>=3.5.0,<3.7.0
+hsfs>=3.4.4,<3.5.0
