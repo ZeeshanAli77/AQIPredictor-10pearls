@@ -222,7 +222,7 @@ def store_features(feature_row: dict):
     fg.insert(
     df,
     write_options={
-        "wait_for_job": False,
+        "wait_for_job": True,
         "start_offline_materialization": False,
     },
 )
