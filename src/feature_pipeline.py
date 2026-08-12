@@ -190,15 +190,25 @@ def store_features(feature_row: dict):
     )
     fs = project.get_feature_store()
 
-    fg = fs.get_or_create_feature_group(
-    name=CONFIG["feature_store"]["feature_group_name"],
-    version=CONFIG["feature_store"]["feature_group_version"],
-    description="Hourly AQI and weather features for Islamabad/Rawalpindi",
-    primary_key=["city", "timestamp"],
-    event_time="timestamp",
-    online_enabled=True,
-    time_travel_format="HUDI",
-)
+    # Get the existing feature group instead of creating new versions
+    try:
+        fg = fs.get_feature_group(
+            CONFIG["feature_store"]["feature_group_name"],
+            version=CONFIG["feature_store"]["feature_group_version"]
+        )
+        print(f"[OK] Connected to existing feature group: {CONFIG['feature_store']['feature_group_name']} v{CONFIG['feature_store']['feature_group_version']}")
+    except Exception as e:
+        print(f"[WARN] Could not find existing feature group: {e}")
+        print("Creating new feature group...")
+        fg = fs.get_or_create_feature_group(
+            name=CONFIG["feature_store"]["feature_group_name"],
+            version=CONFIG["feature_store"]["feature_group_version"],
+            description="Hourly AQI and weather features for Islamabad/Rawalpindi",
+            primary_key=["city", "timestamp"],
+            event_time="timestamp",
+            online_enabled=True,
+            time_travel_format="HUDI",
+        )
 
     df = pd.DataFrame([feature_row])
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
@@ -222,7 +232,7 @@ def store_features(feature_row: dict):
     fg.insert(
     df,
     write_options={
-        "wait_for_job": True,
+        "wait_for_job": False,
         "start_offline_materialization": False,
     },
 )
