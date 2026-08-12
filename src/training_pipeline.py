@@ -227,10 +227,55 @@ def run_training_pipeline():
     print("Fetching training data from Feature Store...")
     df = fetch_training_data()
     df = add_time_series_features(df)
-    print(f"  Total samples: {len(df)}")
+    print(f"  Total samples before cleanup: {len(df)}")
+
+    # DEBUG: Data distribution BEFORE dropna
+    print("\n" + "="*70)
+    print("[DEBUG] TRAINING DATA STATISTICS (BEFORE DROPNA):")
+    print("="*70)
+    print(f"Total samples: {len(df)}")
+    print(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+    print(f"\nAQI Statistics (input feature):")
+    print(f"  Range: {df['aqi'].min():.1f} — {df['aqi'].max():.1f}")
+    print(f"  Mean: {df['aqi'].mean():.1f}, Median: {df['aqi'].median():.1f}")
+    print(f"  Std Dev: {df['aqi'].std():.1f}")
+    print(f"  NaN count: {df['aqi'].isna().sum()}")
+    
+    for target in TARGET_COLS:
+        if target in df.columns:
+            print(f"\n{target} Statistics:")
+            print(f"  Range: {df[target].min():.1f} — {df[target].max():.1f}")
+            print(f"  Mean: {df[target].mean():.1f}, Median: {df[target].median():.1f}")
+            print(f"  Std Dev: {df[target].std():.1f}")
+            print(f"  NaN count: {df[target].isna().sum()}")
+    
+    print("\nFeature NaN Counts (sample):")
+    for col in FEATURE_COLS[:5]:
+        print(f"  {col}: {df[col].isna().sum()} NaNs")
+    print("="*70 + "\n")
 
     df = df.dropna(subset=FEATURE_COLS + TARGET_COLS)
+    
+    # DEBUG: Data distribution AFTER dropna
+    print("\n" + "="*70)
+    print("[DEBUG] TRAINING DATA STATISTICS (AFTER DROPNA):")
+    print("="*70)
+    print(f"Total samples: {len(df)}")
+    print(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+    print(f"\nAQI Statistics (cleaned):")
+    print(f"  Range: {df['aqi'].min():.1f} — {df['aqi'].max():.1f}")
+    print(f"  Mean: {df['aqi'].mean():.1f}, Median: {df['aqi'].median():.1f}")
+    print(f"  Std Dev: {df['aqi'].std():.1f}")
+    
+    for target in TARGET_COLS:
+        if target in df.columns:
+            print(f"\n{target} Statistics:")
+            print(f"  Range: {df[target].min():.1f} — {df[target].max():.1f}")
+            print(f"  Mean: {df[target].mean():.1f}, Median: {df[target].median():.1f}")
+    
     train_df, val_df = split_time_series(df)
+    print(f"\nTrain/Val split: {len(train_df)} train, {len(val_df)} val")
+    print("="*70 + "\n")
 
     X_train = train_df[FEATURE_COLS]
     X_val = val_df[FEATURE_COLS]

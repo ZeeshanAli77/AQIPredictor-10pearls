@@ -87,7 +87,7 @@ def extract_pollutants(aqi_data: dict) -> dict:
     print(f"  aqi (european_aqi): {aqi_data.get('european_aqi', 'MISSING')}")
     print("="*60 + "\n")
     
-    return {
+    pollutants = {
         "aqi": to_float(aqi_data.get("european_aqi", np.nan)),
         "pm25": to_float(aqi_data.get("pm2_5", np.nan)),
         "pm10": to_float(aqi_data.get("pm10", np.nan)),
@@ -96,6 +96,23 @@ def extract_pollutants(aqi_data: dict) -> dict:
         "o3": to_float(aqi_data.get("ozone", np.nan)),
         "so2": to_float(aqi_data.get("dust", np.nan)),
     }
+    
+    # CHECK: Are we getting real data or NULLs?
+    null_count = sum(1 for v in pollutants.values() if np.isnan(v) or v is None)
+    total_cols = len(pollutants)
+    
+    if null_count >= total_cols - 1:
+        print("\n" + "!"*60)
+        print("[CRITICAL] Open-Meteo returned NULL for most/all pollutants!")
+        print("This will cause NaN cascade in predictions.")
+        print("Possible causes:")
+        print("  1. Coordinates (lat/lon) are incorrect")
+        print("  2. Open-Meteo API is down or rate-limited")
+        print("  3. Location has no air quality data available")
+        print(f"  4. Check: LAT={LAT}, LON={LON}")
+        print("!"*60 + "\n")
+    
+    return pollutants
 
 
 def compute_features(pollutants: dict, weather: dict, timestamp: datetime) -> dict:
@@ -180,7 +197,7 @@ def store_features(feature_row: dict):
     primary_key=["city", "timestamp"],
     event_time="timestamp",
     online_enabled=True,
-    time_travel_format="HUDI",  # ← Add this line
+    time_travel_format="HUDI",
 )
 
     df = pd.DataFrame([feature_row])

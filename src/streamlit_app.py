@@ -7,7 +7,7 @@ Developed by Zeeshan
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import joblib
 import pandas as pd
@@ -495,16 +495,26 @@ def load_forecast():
 
         X = latest[feature_cols]
 
-        # Handle missing values
+        # Handle missing values - use recent rolling stats instead of fallback
         if X.isna().any(axis=None):
-            valid = df[feature_cols].dropna()
+            print("\n[WARN] Latest row has NaN features. Using recent data backfill...")
+            recent = df[feature_cols].tail(48).fillna(method='ffill').fillna(method='bfill')
+            if recent.empty or recent.isna().any(axis=None).any():
+                raise RuntimeError("Cannot fill NaN features even with recent 48-hour history.")
+            X = recent.tail(1)
+            print("[OK] Features backfilled from recent data")
 
-            if valid.empty:
-                raise RuntimeError(
-                    "Latest features contain NaNs; check history."
-                )
-
-            X = valid.tail(1)
+        # DEBUG: Print actual features being used
+        print("\n" + "="*70)
+        print("[DEBUG] FEATURES BEING FED TO MODELS:")
+        print("="*70)
+        print(X.to_string())
+        print(f"\nNaN count per column:")
+        print(X.isna().sum())
+        print(f"\nLatest actual AQI in history: {df['aqi'].iloc[-1]:.1f}")
+        data_age_minutes = (datetime.now(timezone.utc) - df['timestamp'].iloc[-1]).total_seconds() / 60
+        print(f"Data age: {data_age_minutes:.1f} minutes")
+        print("="*70 + "\n")
 
         # Make predictions
         pred_24 = float(

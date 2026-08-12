@@ -297,7 +297,7 @@ def run_backfill(months_back: int = 6) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    df = run_backfill(months_back=6)
+    df = run_backfill(months_back=60)
     os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
     df.to_csv(os.path.join(BASE_DIR, "data", "backfill_preview.csv"), index=False)
     print(df[["timestamp", "aqi", "pm25", "temperature"]].tail(10))
