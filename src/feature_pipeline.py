@@ -240,7 +240,7 @@ def store_features(feature_row: dict):
 
 
 def run_feature_pipeline():
-    timestamp = datetime.now(timezone.utc)
+    timestamp = datetime.now(timezone.utc).replace(microsecond=0)
 
     try:
         print("Fetching air quality data from Open-Meteo...")
