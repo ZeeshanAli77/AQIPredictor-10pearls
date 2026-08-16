@@ -113,18 +113,23 @@ def load_best_model(target: str) -> object:
     mr = project.get_model_registry()
     model_name = f"aqi_predictor_{target}"
     
-    # ✅ FIXED: Get LATEST version instead of best RMSE
-    # This ensures we always use your newest trained model
+    # ✅ FIXED: Get LATEST version by listing all versions and picking highest
     try:
-        # Try to get latest model version
-        model = mr.get_latest_model_version(model_name)
-        print(f"[✓] Loading {model_name} v{model.version} (LATEST)")
+        # List all model versions
+        all_models = mr.list_models(model_name)
+        if all_models:
+            # Sort by version and get the latest
+            latest_model = max(all_models, key=lambda x: int(x.version))
+            model = mr.get_model(model_name, version=latest_model.version)
+            print(f"[✓] Loading {model_name} v{model.version} (LATEST)")
+        else:
+            raise Exception("No models found")
     except Exception as e:
-        print(f"[⚠] get_latest_model_version failed ({e}), falling back to get_best_model")
+        print(f"[⚠] Failed to get latest version ({e}), falling back to best RMSE")
         model = mr.get_best_model(model_name, metric="rmse", direction="min")
         print(f"[!] Loaded {model_name} v{model.version} (best RMSE - fallback)")
     
-    # Force fresh download to temp directory to bypass cache
+    # Force fresh download to bypass cache
     temp_dir = tempfile.mkdtemp()
     model_dir = model.download(local_path=temp_dir)
     
