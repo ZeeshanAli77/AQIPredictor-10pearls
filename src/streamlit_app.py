@@ -360,9 +360,15 @@ def get_hopsworks_models(project):
     
     print("[INFO] Loading LATEST model versions from Hopsworks...")
     
+    # 24h model
     try:
-        model_24 = mr.get_latest_model_version("aqi_predictor_target_aqi_24h")
-        print(f"[✓] 24h model: v{model_24.version} (LATEST)")
+        all_models_24 = mr.list_models("aqi_predictor_target_aqi_24h")
+        if all_models_24:
+            latest_24 = max(all_models_24, key=lambda x: int(x.version))
+            model_24 = mr.get_model("aqi_predictor_target_aqi_24h", version=latest_24.version)
+            print(f"[✓] 24h model: v{model_24.version} (LATEST)")
+        else:
+            raise Exception("No 24h models found")
     except Exception as e:
         print(f"[⚠] Failed to get latest 24h model ({e}), falling back to best RMSE")
         model_24 = mr.get_best_model("aqi_predictor_target_aqi_24h", metric="rmse", direction="min")
@@ -373,9 +379,15 @@ def get_hopsworks_models(project):
         os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_model.pkl")
     )
 
+    # 48h model
     try:
-        model_48 = mr.get_latest_model_version("aqi_predictor_target_aqi_48h")
-        print(f"[✓] 48h model: v{model_48.version} (LATEST)")
+        all_models_48 = mr.list_models("aqi_predictor_target_aqi_48h")
+        if all_models_48:
+            latest_48 = max(all_models_48, key=lambda x: int(x.version))
+            model_48 = mr.get_model("aqi_predictor_target_aqi_48h", version=latest_48.version)
+            print(f"[✓] 48h model: v{model_48.version} (LATEST)")
+        else:
+            raise Exception("No 48h models found")
     except Exception as e:
         print(f"[⚠] Failed to get latest 48h model ({e}), falling back to best RMSE")
         model_48 = mr.get_best_model("aqi_predictor_target_aqi_48h", metric="rmse", direction="min")
@@ -386,9 +398,15 @@ def get_hopsworks_models(project):
         os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_model.pkl")
     )
 
+    # 72h model
     try:
-        model_72 = mr.get_latest_model_version("aqi_predictor_target_aqi_72h")
-        print(f"[✓] 72h model: v{model_72.version} (LATEST)")
+        all_models_72 = mr.list_models("aqi_predictor_target_aqi_72h")
+        if all_models_72:
+            latest_72 = max(all_models_72, key=lambda x: int(x.version))
+            model_72 = mr.get_model("aqi_predictor_target_aqi_72h", version=latest_72.version)
+            print(f"[✓] 72h model: v{model_72.version} (LATEST)")
+        else:
+            raise Exception("No 72h models found")
     except Exception as e:
         print(f"[⚠] Failed to get latest 72h model ({e}), falling back to best RMSE")
         model_72 = mr.get_best_model("aqi_predictor_target_aqi_72h", metric="rmse", direction="min")
