@@ -61,6 +61,12 @@ def load_latest_features() -> pd.DataFrame:
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df.sort_values("timestamp")
     
+    # DEBUG: Check what data was actually fetched
+    print(f"\n[DEBUG] Total rows fetched: {len(df)}")
+    print(f"[DEBUG] Earliest timestamp: {df['timestamp'].min()}")
+    print(f"[DEBUG] Latest timestamp: {df['timestamp'].max()}")
+    print(f"[DEBUG] Today's date (expected): 2026-08-16")
+    
     if len(df) < 25:
         raise RuntimeError("Not enough history to compute lag features.")
     
