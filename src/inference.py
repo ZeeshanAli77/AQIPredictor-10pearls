@@ -114,16 +114,35 @@ def load_best_model(target: str) -> object:
     model_name = f"aqi_predictor_{target}"
     
     # ✅ FIXED: Get LATEST version by listing all versions and picking highest
+    model = None
     try:
+        print(f"[DEBUG] Querying all versions for {model_name}...")
         # List all model versions
         all_models = mr.list_models(model_name)
-        if all_models:
-            # Sort by version and get the latest
-            latest_model = max(all_models, key=lambda x: int(x.version))
-            model = mr.get_model(model_name, version=latest_model.version)
-            print(f"[✓] Loading {model_name} v{model.version} (LATEST)")
-        else:
-            raise Exception("No models found")
+        print(f"[DEBUG] Found {len(all_models)} versions")
+        
+        if not all_models:
+            raise Exception(f"No versions found for {model_name}")
+        
+        # Get version numbers and find the maximum
+        versions = []
+        for m in all_models:
+            try:
+                v = int(m.version)
+                versions.append((v, m))
+            except (ValueError, TypeError):
+                continue
+        
+        if not versions:
+            raise Exception(f"Could not parse versions for {model_name}")
+        
+        # Sort and get latest
+        versions.sort(key=lambda x: x[0])
+        latest_version_num, _ = versions[-1]
+        
+        model = mr.get_model(model_name, version=str(latest_version_num))
+        print(f"[✓] Loading {model_name} v{model.version} (LATEST)")
+        
     except Exception as e:
         print(f"[⚠] Failed to get latest version ({e}), falling back to best RMSE")
         model = mr.get_best_model(model_name, metric="rmse", direction="min")
