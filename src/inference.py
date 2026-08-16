@@ -95,16 +95,14 @@ def load_latest_features() -> pd.DataFrame:
 
 
 def load_best_model(target: str) -> object:
-    """Load the best model for a given target from Hopsworks Model Registry."""
     if not HOPSWORKS_API_KEY:
-        raise RuntimeError("HOPSWORKS_API_KEY is missing. Set it in your environment.")
+        raise RuntimeError("HOPSWORKS_API_KEY is missing.")
     
     project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
     mr = project.get_model_registry()
     model = mr.get_best_model(f"aqi_predictor_{target}", metric="rmse", direction="min")
+    model.clear_cache()  # ← FORCE fresh download, don't use cache
     model_dir = model.download()
-    
-    # Load the pipeline (includes scaler + model)
     return joblib.load(os.path.join(model_dir, f"aqi_{target}_model.pkl"))
 
 
