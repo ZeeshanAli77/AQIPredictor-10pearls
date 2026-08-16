@@ -56,8 +56,9 @@ def load_latest_features() -> pd.DataFrame:
     
     project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
     fs = project.get_feature_store()
-    fg = fs.get_feature_group("aqi_features", version=7)
-    df = fg.read(online=True)
+    # Auto-select latest version and read from OFFLINE store (has fresh data from pipeline)
+    fg = fs.get_feature_group("aqi_features")
+    df = fg.read()  # ✅ Reads from offline store, not online
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df.sort_values("timestamp")
     
