@@ -1,13 +1,12 @@
 """
 Inference helpers for AQI prediction.
-FIXED: Now properly handles models with StandardScaler in pipelines.
-The scaler is automatically applied through the loaded pipeline.
 """
 from __future__ import annotations
 import os
 from typing import Dict
 import joblib
 import pandas as pd
+import numpy as np
 import hopsworks
 from dotenv import load_dotenv
 
@@ -50,35 +49,17 @@ FEATURE_COLS = [
 
 
 def load_latest_features() -> pd.DataFrame:
-    """Load latest features from Hopsworks Feature Store with lag computations."""
     if not HOPSWORKS_API_KEY:
         raise RuntimeError("HOPSWORKS_API_KEY is missing. Set it in your environment.")
-    
-    import tempfile
-    
     project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
     fs = project.get_feature_store()
-    # Auto-select latest version and read from OFFLINE store
-    fg = fs.get_feature_group("aqi_features")
-    
-    # Force fresh read by using a temp directory and setting cache=False
-    temp_dir = tempfile.mkdtemp()
-    df = fg.read(cache=False)  # ✅ CRITICAL: Bypass cache
-    
+    fg = fs.get_feature_group("aqi_features", version=7)
+    df = fg.read(online=True)
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df.sort_values("timestamp")
-    
-    # DEBUG: Print what was fetched
-    print(f"\n[DEBUG] Offline store fetch (CACHE BYPASSED):")
-    print(f"  Total rows: {len(df)}")
-    print(f"  Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
-    print(f"  Latest AQI value: {df['aqi'].iloc[-1] if len(df) > 0 else 'N/A'}")
-    print(f"[DEBUG] Latest timestamp: {df['timestamp'].max()}")
-    print(f"[DEBUG] Expected today: 2026-08-16")
-    
     if len(df) < 25:
         raise RuntimeError("Not enough history to compute lag features.")
-    
+
     df["aqi"] = pd.to_numeric(df["aqi"], errors="coerce")
     df["aqi_lag_1h"] = df["aqi"].shift(1)
     df["aqi_lag_3h"] = df["aqi"].shift(3)
@@ -89,62 +70,37 @@ def load_latest_features() -> pd.DataFrame:
     df["aqi_roll_6h"] = df["aqi"].rolling(6).mean()
     df["aqi_roll_24h"] = df["aqi"].rolling(24).mean()
     df["aqi_roll_std"] = df["aqi"].rolling(6).std()
-    
+
     latest = df.tail(1)
     X = latest[FEATURE_COLS]
-    
     if X.isna().any(axis=None):
         valid = df[FEATURE_COLS].dropna()
         if valid.empty:
             raise RuntimeError("Latest features contain NaNs; check historical data.")
         X = valid.tail(1)
-    
     return X
 
 
 def load_best_model(target: str) -> object:
-    """Load the LATEST model version for a given target from Hopsworks Model Registry."""
     if not HOPSWORKS_API_KEY:
         raise RuntimeError("HOPSWORKS_API_KEY is missing. Set it in your environment.")
-    
-    import tempfile
-    import shutil
-    
     project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
     mr = project.get_model_registry()
-    model_name = f"aqi_predictor_{target}"
-    
-    # Get model - get_best_model will auto-pick latest based on RMSE
-    model = mr.get_best_model(model_name, metric="rmse", direction="min")
-    
-    print(f"[DEBUG] Loading {model_name} v{model.version}")
-    
-    # Force fresh download to temp directory to bypass cache
-    temp_dir = tempfile.mkdtemp()
-    model_dir = model.download(local_path=temp_dir)
-    
-    print(f"[DEBUG] Downloaded v{model.version} to {model_dir}")
-    
-    # Load the pipeline (includes scaler + model)
-    model_pkl_path = os.path.join(model_dir, f"aqi_{target}_model.pkl")
-    return joblib.load(model_pkl_path)
+    model = mr.get_best_model(f"aqi_predictor_{target}", metric="rmse", direction="min")
+    model_dir = model.download()
+    return joblib.load(os.path.join(model_dir, f"aqi_{target}_model.pkl"))
 
 
 def predict_latest() -> Dict[str, float]:
-    """
-    Predict AQI for 24h, 48h, and 72h ahead.
-    Scaling is automatically handled by the loaded pipeline.
-    """
     X = load_latest_features()
     preds = {}
     
     for target in ("target_aqi_24h", "target_aqi_48h", "target_aqi_72h"):
         model = load_best_model(target)
-        # model.predict() automatically applies scaler from pipeline
         preds[target] = float(model.predict(X)[0])
-    
     return preds
 
 
 if __name__ == "__main__":
-    print(predict_latest())
+    result = predict_latest()
+    print(f"\nFinal Predictions:\n{result}")
