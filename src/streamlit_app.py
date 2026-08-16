@@ -2,7 +2,6 @@
 Islamabad Air Quality Forecasting System - Enhanced UI
 Real-time AQI predictions for Islamabad, Pakistan
 Developed by Zeeshan
-UPDATED: Now loads LATEST model versions instead of best RMSE
 """
 
 from __future__ import annotations
@@ -344,94 +343,61 @@ def load_current_aqi():
     }
 
 def get_hopsworks_project():
-    """Get fresh Hopsworks project connection (no caching - causes serialization issues)"""
-    print("[DEBUG] Creating fresh Hopsworks connection...")
-    project = hopsworks.login(
+    """Cache the Hopsworks project connection"""
+    return hopsworks.login(
         api_key_value=get_secret("HOPSWORKS_API_KEY"),
         host=get_secret("HOPSWORKS_HOST")
     )
-    print("[✓] Hopsworks connection established")
-    return project
 
 def get_hopsworks_models(project):
-    """Load the LATEST trained models from Hopsworks Model Registry"""
+    """Load the trained models from Hopsworks Model Registry"""
 
     mr = project.get_model_registry()
 
-    # ✅ FIXED: Load LATEST model versions instead of best RMSE
-    # This ensures we always use your newest trained models
-    
-    print("[INFO] Loading LATEST model versions from Hopsworks...")
-    
-    # Helper function to load a single model
-    def load_latest_model(model_name: str):
-        """Load latest model version by querying all versions"""
-        try:
-            print(f"[DEBUG] Querying all versions for {model_name}...")
-            # List all model versions
-            all_models = mr.list_models(model_name)
-            print(f"[DEBUG] Found {len(all_models)} versions")
-            
-            if not all_models:
-                raise Exception(f"No versions found for {model_name}")
-            
-            # Get version numbers and find the maximum
-            versions = []
-            for m in all_models:
-                try:
-                    v = int(m.version)
-                    versions.append((v, m))
-                except (ValueError, TypeError):
-                    continue
-            
-            if not versions:
-                raise Exception(f"Could not parse versions for {model_name}")
-            
-            # Sort and get latest
-            versions.sort(key=lambda x: x[0])
-            latest_version_num, latest_model = versions[-1]
-            
-            print(f"[✓] Found latest version: v{latest_version_num}")
-            
-            # Force fresh download by clearing cache
-            model = mr.get_model(model_name, version=str(latest_version_num))
-            print(f"[✓] Loaded {model_name} v{model.version} (LATEST)")
-            return model
-            
-        except Exception as e:
-            print(f"[⚠] Failed to get latest {model_name}: {e}")
-            print(f"[⚠] Falling back to get_best_model by RMSE")
-            model = mr.get_best_model(model_name, metric="rmse", direction="min")
-            print(f"[!] Using {model_name} v{model.version} (best RMSE - fallback)")
-            return model
-    
-    # Load all three models
-    model_24 = load_latest_model("aqi_predictor_target_aqi_24h")
-    model_48 = load_latest_model("aqi_predictor_target_aqi_48h")
-    model_72 = load_latest_model("aqi_predictor_target_aqi_72h")
-    
-    # Download with forced refresh (bypass cache)
-    print("[INFO] Downloading models (forcing fresh download)...")
-    import tempfile
-    import shutil
-    
-    # 24h model
-    temp_dir_24 = tempfile.mkdtemp()
-    saved_model_dir_24 = model_24.download(local_path=temp_dir_24)
-    print(f"[✓] Downloaded 24h model to {saved_model_dir_24}")
-    clf_24 = joblib.load(os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_model.pkl"))
-    
-    # 48h model
-    temp_dir_48 = tempfile.mkdtemp()
-    saved_model_dir_48 = model_48.download(local_path=temp_dir_48)
-    print(f"[✓] Downloaded 48h model to {saved_model_dir_48}")
-    clf_48 = joblib.load(os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_model.pkl"))
-    
-    # 72h model
-    temp_dir_72 = tempfile.mkdtemp()
-    saved_model_dir_72 = model_72.download(local_path=temp_dir_72)
-    print(f"[✓] Downloaded 72h model to {saved_model_dir_72}")
-    clf_72 = joblib.load(os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_model.pkl"))
+    model_24 = mr.get_best_model(
+        "aqi_predictor_target_aqi_24h",
+        metric="rmse",
+        direction="min"
+    )
+
+    saved_model_dir_24 = model_24.download()
+
+    clf_24 = joblib.load(
+        os.path.join(
+            saved_model_dir_24,
+            "aqi_target_aqi_24h_model.pkl"
+        )
+    )
+
+    model_48 = mr.get_best_model(
+        "aqi_predictor_target_aqi_48h",
+        metric="rmse",
+        direction="min"
+    )
+
+    saved_model_dir_48 = model_48.download()
+
+    clf_48 = joblib.load(
+        os.path.join(
+            saved_model_dir_48,
+            "aqi_target_aqi_48h_model.pkl"
+        )
+    )
+
+    model_72 = mr.get_best_model(
+        "aqi_predictor_target_aqi_72h",
+        metric="rmse",
+        direction="min"
+    )
+
+    saved_model_dir_72 = model_72.download()
+
+    clf_72 = joblib.load(
+        os.path.join(
+            saved_model_dir_72,
+            "aqi_target_aqi_72h_model.pkl"
+        )
+    )
 
     return clf_24, clf_48, clf_72
 
@@ -439,24 +405,12 @@ def get_hopsworks_models(project):
 def load_forecast():
     """Load 3-day AQI forecast from Hopsworks models"""
     try:
-        print("\n" + "="*70)
-        print("[INFO] Starting forecast load...")
-        print("="*70)
-        
         project = get_hopsworks_project()
-        print("[✓] Project connected")
-        
         clf_24, clf_48, clf_72 = get_hopsworks_models(project)
-        print("[✓] Models loaded")
 
         fs = project.get_feature_store()
-        print("[✓] Feature store connected")
-        
         fg = fs.get_feature_group("aqi_features", version=7)
-        print("[✓] Feature group accessed")
-        
         df = fg.read()
-        print(f"[✓] Read {len(df)} rows from feature store")
 
         df["timestamp"] = pd.to_datetime(
             df["timestamp"],
@@ -563,7 +517,6 @@ def load_forecast():
         print("="*70 + "\n")
 
         # Make predictions
-        print("[INFO] Making predictions...")
         pred_24 = float(
             clf_24.predict(X)[0]
         )
@@ -575,7 +528,6 @@ def load_forecast():
         pred_72 = float(
             clf_72.predict(X)[0]
         )
-        print("[✓] Predictions made successfully")
 
         # Debug information
         print("===== AQI FORECAST DEBUG =====")
@@ -635,11 +587,6 @@ def load_forecast():
         ]
 
     except Exception as exc:
-        print(f"\n[ERROR] Forecast load failed: {exc}")
-        print(f"[ERROR] Exception type: {type(exc).__name__}")
-        import traceback
-        traceback.print_exc()
-        
         st.warning(
             f"Could not load live model predictions. ({exc})"
         )
