@@ -2,7 +2,6 @@
 Inference helpers for AQI prediction.
 FIXED: Now properly handles models with StandardScaler in pipelines.
 The scaler is automatically applied through the loaded pipeline.
-UPDATED: Uses latest model version instead of best RMSE (avoids overfitting).
 """
 from __future__ import annotations
 import os
@@ -75,6 +74,7 @@ def load_latest_features() -> pd.DataFrame:
     print(f"  Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
     print(f"  Latest AQI value: {df['aqi'].iloc[-1] if len(df) > 0 else 'N/A'}")
     print(f"[DEBUG] Latest timestamp: {df['timestamp'].max()}")
+    print(f"[DEBUG] Expected today: 2026-08-16")
     
     if len(df) < 25:
         raise RuntimeError("Not enough history to compute lag features.")
@@ -108,47 +108,18 @@ def load_best_model(target: str) -> object:
         raise RuntimeError("HOPSWORKS_API_KEY is missing. Set it in your environment.")
     
     import tempfile
+    import shutil
     
     project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
     mr = project.get_model_registry()
     model_name = f"aqi_predictor_{target}"
     
-    # ✅ FIXED: Get LATEST version by listing all versions and picking highest
-    model = None
-    try:
-        print(f"[DEBUG] Querying all versions for {model_name}...")
-        # List all model versions
-        all_models = mr.list_models(model_name)
-        print(f"[DEBUG] Found {len(all_models)} versions")
-        
-        if not all_models:
-            raise Exception(f"No versions found for {model_name}")
-        
-        # Get version numbers and find the maximum
-        versions = []
-        for m in all_models:
-            try:
-                v = int(m.version)
-                versions.append((v, m))
-            except (ValueError, TypeError):
-                continue
-        
-        if not versions:
-            raise Exception(f"Could not parse versions for {model_name}")
-        
-        # Sort and get latest
-        versions.sort(key=lambda x: x[0])
-        latest_version_num, _ = versions[-1]
-        
-        model = mr.get_model(model_name, version=str(latest_version_num))
-        print(f"[✓] Loading {model_name} v{model.version} (LATEST)")
-        
-    except Exception as e:
-        print(f"[⚠] Failed to get latest version ({e}), falling back to best RMSE")
-        model = mr.get_best_model(model_name, metric="rmse", direction="min")
-        print(f"[!] Loaded {model_name} v{model.version} (best RMSE - fallback)")
+    # Get model - get_best_model will auto-pick latest based on RMSE
+    model = mr.get_best_model(model_name, metric="rmse", direction="min")
     
-    # Force fresh download to bypass cache
+    print(f"[DEBUG] Loading {model_name} v{model.version}")
+    
+    # Force fresh download to temp directory to bypass cache
     temp_dir = tempfile.mkdtemp()
     model_dir = model.download(local_path=temp_dir)
     
@@ -163,7 +134,6 @@ def predict_latest() -> Dict[str, float]:
     """
     Predict AQI for 24h, 48h, and 72h ahead.
     Scaling is automatically handled by the loaded pipeline.
-    Uses LATEST model versions for all targets.
     """
     X = load_latest_features()
     preds = {}
