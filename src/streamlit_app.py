@@ -360,62 +360,75 @@ def get_hopsworks_models(project):
     
     print("[INFO] Loading LATEST model versions from Hopsworks...")
     
+    # Helper function to load a single model
+    def load_latest_model(model_name: str):
+        """Load latest model version by querying all versions"""
+        try:
+            print(f"[DEBUG] Querying all versions for {model_name}...")
+            # List all model versions
+            all_models = mr.list_models(model_name)
+            print(f"[DEBUG] Found {len(all_models)} versions")
+            
+            if not all_models:
+                raise Exception(f"No versions found for {model_name}")
+            
+            # Get version numbers and find the maximum
+            versions = []
+            for m in all_models:
+                try:
+                    v = int(m.version)
+                    versions.append((v, m))
+                except (ValueError, TypeError):
+                    continue
+            
+            if not versions:
+                raise Exception(f"Could not parse versions for {model_name}")
+            
+            # Sort and get latest
+            versions.sort(key=lambda x: x[0])
+            latest_version_num, latest_model = versions[-1]
+            
+            print(f"[✓] Found latest version: v{latest_version_num}")
+            
+            # Force fresh download by clearing cache
+            model = mr.get_model(model_name, version=str(latest_version_num))
+            print(f"[✓] Loaded {model_name} v{model.version} (LATEST)")
+            return model
+            
+        except Exception as e:
+            print(f"[⚠] Failed to get latest {model_name}: {e}")
+            print(f"[⚠] Falling back to get_best_model by RMSE")
+            model = mr.get_best_model(model_name, metric="rmse", direction="min")
+            print(f"[!] Using {model_name} v{model.version} (best RMSE - fallback)")
+            return model
+    
+    # Load all three models
+    model_24 = load_latest_model("aqi_predictor_target_aqi_24h")
+    model_48 = load_latest_model("aqi_predictor_target_aqi_48h")
+    model_72 = load_latest_model("aqi_predictor_target_aqi_72h")
+    
+    # Download with forced refresh (bypass cache)
+    print("[INFO] Downloading models (forcing fresh download)...")
+    import tempfile
+    import shutil
+    
     # 24h model
-    try:
-        all_models_24 = mr.list_models("aqi_predictor_target_aqi_24h")
-        if all_models_24:
-            latest_24 = max(all_models_24, key=lambda x: int(x.version))
-            model_24 = mr.get_model("aqi_predictor_target_aqi_24h", version=latest_24.version)
-            print(f"[✓] 24h model: v{model_24.version} (LATEST)")
-        else:
-            raise Exception("No 24h models found")
-    except Exception as e:
-        print(f"[⚠] Failed to get latest 24h model ({e}), falling back to best RMSE")
-        model_24 = mr.get_best_model("aqi_predictor_target_aqi_24h", metric="rmse", direction="min")
-        print(f"[!] 24h model: v{model_24.version} (best RMSE - fallback)")
-
-    saved_model_dir_24 = model_24.download()
-    clf_24 = joblib.load(
-        os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_model.pkl")
-    )
-
+    temp_dir_24 = tempfile.mkdtemp()
+    saved_model_dir_24 = model_24.download(local_path=temp_dir_24)
+    print(f"[✓] Downloaded 24h model to {saved_model_dir_24}")
+    clf_24 = joblib.load(os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_model.pkl"))
+    
     # 48h model
-    try:
-        all_models_48 = mr.list_models("aqi_predictor_target_aqi_48h")
-        if all_models_48:
-            latest_48 = max(all_models_48, key=lambda x: int(x.version))
-            model_48 = mr.get_model("aqi_predictor_target_aqi_48h", version=latest_48.version)
-            print(f"[✓] 48h model: v{model_48.version} (LATEST)")
-        else:
-            raise Exception("No 48h models found")
-    except Exception as e:
-        print(f"[⚠] Failed to get latest 48h model ({e}), falling back to best RMSE")
-        model_48 = mr.get_best_model("aqi_predictor_target_aqi_48h", metric="rmse", direction="min")
-        print(f"[!] 48h model: v{model_48.version} (best RMSE - fallback)")
-
-    saved_model_dir_48 = model_48.download()
-    clf_48 = joblib.load(
-        os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_model.pkl")
-    )
-
+    temp_dir_48 = tempfile.mkdtemp()
+    saved_model_dir_48 = model_48.download(local_path=temp_dir_48)
+    print(f"[✓] Downloaded 48h model to {saved_model_dir_48}")
+    clf_48 = joblib.load(os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_model.pkl"))
+    
     # 72h model
-    try:
-        all_models_72 = mr.list_models("aqi_predictor_target_aqi_72h")
-        if all_models_72:
-            latest_72 = max(all_models_72, key=lambda x: int(x.version))
-            model_72 = mr.get_model("aqi_predictor_target_aqi_72h", version=latest_72.version)
-            print(f"[✓] 72h model: v{model_72.version} (LATEST)")
-        else:
-            raise Exception("No 72h models found")
-    except Exception as e:
-        print(f"[⚠] Failed to get latest 72h model ({e}), falling back to best RMSE")
-        model_72 = mr.get_best_model("aqi_predictor_target_aqi_72h", metric="rmse", direction="min")
-        print(f"[!] 72h model: v{model_72.version} (best RMSE - fallback)")
-
-    saved_model_dir_72 = model_72.download()
-    clf_72 = joblib.load(
-        os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_model.pkl")
-    )
+    temp_dir_72 = tempfile.mkdtemp()
+    saved_model_dir_72 = model_72.download(local_path=temp_dir_72)
+    print(f"[✓] Downloaded 72h model to {saved_model_dir_72}")
+    clf_72 = joblib.load(os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_model.pkl"))
 
     return clf_24, clf_48, clf_72
 
