@@ -1,5 +1,6 @@
 """
 Training Pipeline: Train, evaluate, and register AQI prediction models.
+FIXED: All models now use StandardScaler in pipelines for consistency.
 Runs daily via GitHub Actions.
 """
 
@@ -68,6 +69,7 @@ TARGET_COLS = ["target_aqi_24h", "target_aqi_48h", "target_aqi_72h"]
 
 
 def add_time_series_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Add time series features like lags and rolling statistics."""
     df = df.sort_values("timestamp").copy()
     df["aqi"] = pd.to_numeric(df["aqi"], errors="coerce")
 
@@ -126,6 +128,7 @@ def split_time_series(df: pd.DataFrame, val_fraction: float = 0.15):
 
 
 def evaluate_model(model, X_val, y_val) -> dict:
+    """Evaluate model and return RMSE, MAE, R2 scores."""
     preds = model.predict(X_val)
     return {
         "rmse": round(float(np.sqrt(mean_squared_error(y_val, preds))), 4),
@@ -135,25 +138,45 @@ def evaluate_model(model, X_val, y_val) -> dict:
 
 
 def train_models(X_train, y_train, X_val, y_val, target_name: str):
+    """
+    Train multiple models with proper scaling in pipelines.
+    All models now wrapped in Pipeline with StandardScaler for consistency.
+    """
     models = {
         "ridge": Pipeline(
             [("scaler", StandardScaler()), ("model", Ridge(alpha=1.0))]
         ),
-        "random_forest": RandomForestRegressor(
-            n_estimators=200,
-            max_depth=15,
-            min_samples_leaf=5,
-            n_jobs=-1,
-            random_state=42,
+        "random_forest": Pipeline(
+            [
+                ("scaler", StandardScaler()),
+                (
+                    "model",
+                    RandomForestRegressor(
+                        n_estimators=200,
+                        max_depth=15,
+                        min_samples_leaf=5,
+                        n_jobs=-1,
+                        random_state=42,
+                    ),
+                ),
+            ]
         ),
-        "xgboost": xgb.XGBRegressor(
-            n_estimators=300,
-            max_depth=6,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42,
-            tree_method="hist",
+        "xgboost": Pipeline(
+            [
+                ("scaler", StandardScaler()),
+                (
+                    "model",
+                    xgb.XGBRegressor(
+                        n_estimators=300,
+                        max_depth=6,
+                        learning_rate=0.05,
+                        subsample=0.8,
+                        colsample_bytree=0.8,
+                        random_state=42,
+                        tree_method="hist",
+                    ),
+                ),
+            ]
         ),
     }
 
@@ -174,13 +197,21 @@ def compute_shap_values(model, X_val: pd.DataFrame, model_name: str):
     """Compute and save SHAP feature importance plot."""
     print("  Computing SHAP values...")
     try:
-        if model_name in ("xgboost", "random_forest"):
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(X_val)
+        # Extract the actual model from the pipeline
+        if hasattr(model, "named_steps"):
+            actual_model = model.named_steps["model"]
+            scaler = model.named_steps["scaler"]
+            X_val_scaled = scaler.transform(X_val)
         else:
-            scaled = model.named_steps["scaler"].transform(X_val)
-            explainer = shap.LinearExplainer(model.named_steps["model"], scaled)
-            shap_values = explainer.shap_values(scaled)
+            actual_model = model
+            X_val_scaled = X_val
+
+        if model_name in ("xgboost", "random_forest"):
+            explainer = shap.TreeExplainer(actual_model)
+            shap_values = explainer.shap_values(X_val_scaled)
+        else:
+            explainer = shap.LinearExplainer(actual_model, X_val_scaled)
+            shap_values = explainer.shap_values(X_val_scaled)
 
         shap.summary_plot(shap_values, X_val, show=False, max_display=15)
         plt.tight_layout()
@@ -206,6 +237,7 @@ def register_model(project, model, model_name: str, metrics: dict, target: str, 
         "metrics": metrics,
         "trained_at": datetime.utcnow().isoformat(),
         "city": "islamabad_rawalpindi",
+        "note": "Model includes StandardScaler in pipeline for proper scaling.",
     }
     with open("model_artifacts/metadata.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
@@ -214,7 +246,7 @@ def register_model(project, model, model_name: str, metrics: dict, target: str, 
     hw_model = mr.sklearn.create_model(
         name=f"aqi_predictor_{target}",
         metrics=metrics,
-        description=f"AQI {target} prediction | {model_name} | Islamabad/Rawalpindi",
+        description=f"AQI {target} prediction | {model_name} | Islamabad/Rawalpindi | Scaled",
         input_example=pd.DataFrame([{col: 0.0 for col in feature_cols}]),
         feature_view=None,
     )
@@ -224,6 +256,7 @@ def register_model(project, model, model_name: str, metrics: dict, target: str, 
 
 
 def run_training_pipeline():
+    """Main training pipeline."""
     print("Fetching training data from Feature Store...")
     df = fetch_training_data()
     df = add_time_series_features(df)
