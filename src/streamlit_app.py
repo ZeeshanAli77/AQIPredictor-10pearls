@@ -350,54 +350,62 @@ def get_hopsworks_project():
     )
 
 def get_hopsworks_models(project):
-    """Load the trained models from Hopsworks Model Registry"""
+    """Load the latest trained models from Hopsworks Model Registry
+    
+    Automatically fetches the newest version of each model.
+    As new models are trained (v21, v22, v30, etc.), they're used without code changes.
+    """
 
     mr = project.get_model_registry()
 
-    model_24 = mr.get_best_model(
+    def load_latest_model(model_name: str, pkl_filename: str) -> tuple:
+        """Get the latest version of a model and load it"""
+        model = mr.get_model(model_name)
+        
+        # Get all available versions
+        all_versions = model.get_all_versions()
+        
+        if not all_versions:
+            raise RuntimeError(f"No versions found for model: {model_name}")
+        
+        # Get the latest version (highest version number)
+        latest_version = max(all_versions, key=lambda v: v.version)
+        version_num = latest_version.version
+        
+        print(f"✓ Loading {model_name} version {version_num}")
+        
+        # Download the latest model
+        saved_model_dir = latest_version.download()
+        
+        # Load the model
+        clf = joblib.load(
+            os.path.join(saved_model_dir, pkl_filename)
+        )
+        
+        return clf, version_num
+
+    # Load all three models with their latest versions
+    clf_24, v24 = load_latest_model(
         "aqi_predictor_target_aqi_24h",
-        metric="rmse",
-        direction="min"
+        "aqi_target_aqi_24h_model.pkl"
     )
-
-    saved_model_dir_24 = model_24.download()
-
-    clf_24 = joblib.load(
-        os.path.join(
-            saved_model_dir_24,
-            "aqi_target_aqi_24h_model.pkl"
-        )
-    )
-
-    model_48 = mr.get_best_model(
+    
+    clf_48, v48 = load_latest_model(
         "aqi_predictor_target_aqi_48h",
-        metric="rmse",
-        direction="min"
+        "aqi_target_aqi_48h_model.pkl"
     )
-
-    saved_model_dir_48 = model_48.download()
-
-    clf_48 = joblib.load(
-        os.path.join(
-            saved_model_dir_48,
-            "aqi_target_aqi_48h_model.pkl"
-        )
-    )
-
-    model_72 = mr.get_best_model(
+    
+    clf_72, v72 = load_latest_model(
         "aqi_predictor_target_aqi_72h",
-        metric="rmse",
-        direction="min"
+        "aqi_target_aqi_72h_model.pkl"
     )
-
-    saved_model_dir_72 = model_72.download()
-
-    clf_72 = joblib.load(
-        os.path.join(
-            saved_model_dir_72,
-            "aqi_target_aqi_72h_model.pkl"
-        )
-    )
+    
+    print(f"\n{'='*70}")
+    print(f"✓ LOADED LATEST MODELS FROM HOPSWORKS")
+    print(f"  📦 24h forecast model: v{v24}")
+    print(f"  📦 48h forecast model: v{v48}")
+    print(f"  📦 72h forecast model: v{v72}")
+    print(f"{'='*70}\n")
 
     return clf_24, clf_48, clf_72
 
