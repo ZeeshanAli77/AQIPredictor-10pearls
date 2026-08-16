@@ -2,6 +2,7 @@
 Islamabad Air Quality Forecasting System - Enhanced UI
 Real-time AQI predictions for Islamabad, Pakistan
 Developed by Zeeshan
+UPDATED: Now loads LATEST model versions instead of best RMSE
 """
 
 from __future__ import annotations
@@ -350,94 +351,53 @@ def get_hopsworks_project():
     )
 
 def get_hopsworks_models(project):
-    """Load the latest trained models from Hopsworks Model Registry
-    
-    Automatically fetches the newest version of each model.
-    As new models are trained (v21, v22, v30, etc.), they're used without code changes.
-    """
+    """Load the LATEST trained models from Hopsworks Model Registry"""
 
     mr = project.get_model_registry()
 
-    def load_latest_model(model_name: str, pkl_filename: str) -> tuple:
-        """Get the latest version of a model by trying versions 1-50"""
-        
-        latest_version = None
-        latest_version_num = None
-        
-        print(f"\n🔍 Finding latest version of {model_name}...")
-        
-        # Try versions from 50 down to 1 (covers up to v30+)
-        found_any = False
-        for version_num in range(50, 0, -1):
-            try:
-                # Try to get this specific version
-                model_version = mr.get_model(model_name, version=version_num)
-                # If successful, this is the latest
-                latest_version = model_version
-                latest_version_num = version_num
-                print(f"✓ Found {model_name} version {version_num}")
-                found_any = True
-                break  # Found the latest, stop searching
-                
-            except Exception as e:
-                # Check error type to see if version actually doesn't exist
-                error_msg = str(e).lower()
-                
-                # If this is a "not found" error, it's expected - version doesn't exist
-                if any(phrase in error_msg for phrase in 
-                       ["not found", "does not exist", "could not find", "could not retrieve"]):
-                    # This is expected - version doesn't exist
-                    continue
-                else:
-                    # Unexpected error - print it
-                    if not found_any:
-                        print(f"  [v{version_num}: {type(e).__name__}]", end=" ")
-                    continue
-        
-        if latest_version is None:
-            # Couldn't find by iterating, raise error
-            raise RuntimeError(
-                f"Could not find any version of model {model_name}. "
-                "The model may not exist in Hopsworks."
-            )
-        
-        print(f"📥 Downloading and loading v{latest_version_num}...")
-        
-        # Download and load the model
-        saved_model_dir = latest_version.download()
-        
-        clf = joblib.load(
-            os.path.join(saved_model_dir, pkl_filename)
-        )
-        
-        return clf, latest_version_num
+    # ✅ FIXED: Load LATEST model versions instead of best RMSE
+    # This ensures we always use your newest trained models
+    
+    print("[INFO] Loading LATEST model versions from Hopsworks...")
+    
+    try:
+        model_24 = mr.get_latest_model_version("aqi_predictor_target_aqi_24h")
+        print(f"[✓] 24h model: v{model_24.version} (LATEST)")
+    except Exception as e:
+        print(f"[⚠] Failed to get latest 24h model ({e}), falling back to best RMSE")
+        model_24 = mr.get_best_model("aqi_predictor_target_aqi_24h", metric="rmse", direction="min")
+        print(f"[!] 24h model: v{model_24.version} (best RMSE - fallback)")
 
-    # Load all three models with their latest versions
-    print("\n" + "="*70)
-    print("📦 LOADING LATEST MODELS FROM HOPSWORKS")
-    print("="*70)
-    
-    clf_24, v24 = load_latest_model(
-        "aqi_predictor_target_aqi_24h",
-        "aqi_target_aqi_24h_model.pkl"
+    saved_model_dir_24 = model_24.download()
+    clf_24 = joblib.load(
+        os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_model.pkl")
     )
-    
-    clf_48, v48 = load_latest_model(
-        "aqi_predictor_target_aqi_48h",
-        "aqi_target_aqi_48h_model.pkl"
+
+    try:
+        model_48 = mr.get_latest_model_version("aqi_predictor_target_aqi_48h")
+        print(f"[✓] 48h model: v{model_48.version} (LATEST)")
+    except Exception as e:
+        print(f"[⚠] Failed to get latest 48h model ({e}), falling back to best RMSE")
+        model_48 = mr.get_best_model("aqi_predictor_target_aqi_48h", metric="rmse", direction="min")
+        print(f"[!] 48h model: v{model_48.version} (best RMSE - fallback)")
+
+    saved_model_dir_48 = model_48.download()
+    clf_48 = joblib.load(
+        os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_model.pkl")
     )
-    
-    clf_72, v72 = load_latest_model(
-        "aqi_predictor_target_aqi_72h",
-        "aqi_target_aqi_72h_model.pkl"
+
+    try:
+        model_72 = mr.get_latest_model_version("aqi_predictor_target_aqi_72h")
+        print(f"[✓] 72h model: v{model_72.version} (LATEST)")
+    except Exception as e:
+        print(f"[⚠] Failed to get latest 72h model ({e}), falling back to best RMSE")
+        model_72 = mr.get_best_model("aqi_predictor_target_aqi_72h", metric="rmse", direction="min")
+        print(f"[!] 72h model: v{model_72.version} (best RMSE - fallback)")
+
+    saved_model_dir_72 = model_72.download()
+    clf_72 = joblib.load(
+        os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_model.pkl")
     )
-    
-    print(f"\n{'='*70}")
-    print(f"✅ LOADED LATEST MODELS FROM HOPSWORKS")
-    print(f"  📦 24h forecast model: v{v24}")
-    print(f"  📦 48h forecast model: v{v48}")
-    print(f"  📦 72h forecast model: v{v72}")
-    print(f"{'='*70}\n")
 
     return clf_24, clf_48, clf_72
 
