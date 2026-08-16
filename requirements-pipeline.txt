@@ -10,4 +10,4 @@ joblib
 matplotlib
 shap
 xgboost
-scikit-learn
+scikit-learn==1.9.0
