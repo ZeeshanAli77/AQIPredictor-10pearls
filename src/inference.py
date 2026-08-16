@@ -54,25 +54,27 @@ def load_latest_features() -> pd.DataFrame:
     if not HOPSWORKS_API_KEY:
         raise RuntimeError("HOPSWORKS_API_KEY is missing. Set it in your environment.")
     
+    import tempfile
+    
     project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
     fs = project.get_feature_store()
-    # Auto-select latest version and read from OFFLINE store (has fresh data from pipeline)
+    # Auto-select latest version and read from OFFLINE store
     fg = fs.get_feature_group("aqi_features")
-    df = fg.read()  # ✅ Reads from offline store, not online
+    
+    # Force fresh read by using a temp directory and setting cache=False
+    temp_dir = tempfile.mkdtemp()
+    df = fg.read(cache=False)  # ✅ CRITICAL: Bypass cache
+    
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df.sort_values("timestamp")
     
     # DEBUG: Print what was fetched
-    print(f"\n[DEBUG] Offline store fetch:")
+    print(f"\n[DEBUG] Offline store fetch (CACHE BYPASSED):")
     print(f"  Total rows: {len(df)}")
     print(f"  Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
     print(f"  Latest AQI value: {df['aqi'].iloc[-1] if len(df) > 0 else 'N/A'}")
-    
-    # DEBUG: Check what data was actually fetched
-    print(f"\n[DEBUG] Total rows fetched: {len(df)}")
-    print(f"[DEBUG] Earliest timestamp: {df['timestamp'].min()}")
     print(f"[DEBUG] Latest timestamp: {df['timestamp'].max()}")
-    print(f"[DEBUG] Today's date (expected): 2026-08-16")
+    print(f"[DEBUG] Expected today: 2026-08-16")
     
     if len(df) < 25:
         raise RuntimeError("Not enough history to compute lag features.")
@@ -105,21 +107,27 @@ def load_best_model(target: str) -> object:
     if not HOPSWORKS_API_KEY:
         raise RuntimeError("HOPSWORKS_API_KEY is missing. Set it in your environment.")
     
+    import tempfile
+    import shutil
+    
     project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
     mr = project.get_model_registry()
     model_name = f"aqi_predictor_{target}"
     
-    # Get model and force clear cache to get LATEST version, not cached old one
+    # Get model - get_best_model will auto-pick latest based on RMSE
     model = mr.get_best_model(model_name, metric="rmse", direction="min")
-    model.clear_cache()  # ✅ CRITICAL: Force fresh download
     
-    print(f"[DEBUG] Loaded model: {model_name}")
-    print(f"[DEBUG] Model version: {model.version}")
+    print(f"[DEBUG] Loading {model_name} v{model.version}")
     
-    model_dir = model.download()
+    # Force fresh download to temp directory to bypass cache
+    temp_dir = tempfile.mkdtemp()
+    model_dir = model.download(local_path=temp_dir)
+    
+    print(f"[DEBUG] Downloaded v{model.version} to {model_dir}")
     
     # Load the pipeline (includes scaler + model)
-    return joblib.load(os.path.join(model_dir, f"aqi_{target}_model.pkl"))
+    model_pkl_path = os.path.join(model_dir, f"aqi_{target}_model.pkl")
+    return joblib.load(model_pkl_path)
 
 
 def predict_latest() -> Dict[str, float]:
