@@ -359,31 +359,49 @@ def get_hopsworks_models(project):
     mr = project.get_model_registry()
 
     def load_latest_model(model_name: str, pkl_filename: str) -> tuple:
-        """Get the latest version of a model by querying versions 1-200"""
+        """Get the latest version of a model by trying versions 1-50"""
         
         latest_version = None
         latest_version_num = None
         
-        # Try versions from 200 down to 1 to find the highest that exists
-        print(f"🔍 Finding latest version of {model_name}...")
+        print(f"\n🔍 Finding latest version of {model_name}...")
         
-        for version_num in range(200, 0, -1):
+        # Try versions from 50 down to 1 (covers up to v30+)
+        found_any = False
+        for version_num in range(50, 0, -1):
             try:
                 # Try to get this specific version
                 model_version = mr.get_model(model_name, version=version_num)
+                # If successful, this is the latest
                 latest_version = model_version
                 latest_version_num = version_num
                 print(f"✓ Found {model_name} version {version_num}")
+                found_any = True
                 break  # Found the latest, stop searching
-            except Exception:
-                # This version doesn't exist, try the next lower one
-                continue
+                
+            except Exception as e:
+                # Check error type to see if version actually doesn't exist
+                error_msg = str(e).lower()
+                
+                # If this is a "not found" error, it's expected - version doesn't exist
+                if any(phrase in error_msg for phrase in 
+                       ["not found", "does not exist", "could not find", "could not retrieve"]):
+                    # This is expected - version doesn't exist
+                    continue
+                else:
+                    # Unexpected error - print it
+                    if not found_any:
+                        print(f"  [v{version_num}: {type(e).__name__}]", end=" ")
+                    continue
         
         if latest_version is None:
+            # Couldn't find by iterating, raise error
             raise RuntimeError(
                 f"Could not find any version of model {model_name}. "
-                "Make sure the model exists in Hopsworks."
+                "The model may not exist in Hopsworks."
             )
+        
+        print(f"📥 Downloading and loading v{latest_version_num}...")
         
         # Download and load the model
         saved_model_dir = latest_version.download()
@@ -414,7 +432,8 @@ def get_hopsworks_models(project):
         "aqi_target_aqi_72h_model.pkl"
     )
     
-    print(f"\n✅ LOADED LATEST MODELS FROM HOPSWORKS")
+    print(f"\n{'='*70}")
+    print(f"✅ LOADED LATEST MODELS FROM HOPSWORKS")
     print(f"  📦 24h forecast model: v{v24}")
     print(f"  📦 48h forecast model: v{v48}")
     print(f"  📦 72h forecast model: v{v72}")
