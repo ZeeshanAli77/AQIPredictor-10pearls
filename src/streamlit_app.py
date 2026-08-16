@@ -344,11 +344,14 @@ def load_current_aqi():
     }
 
 def get_hopsworks_project():
-    """Cache the Hopsworks project connection"""
-    return hopsworks.login(
+    """Get fresh Hopsworks project connection (no caching - causes serialization issues)"""
+    print("[DEBUG] Creating fresh Hopsworks connection...")
+    project = hopsworks.login(
         api_key_value=get_secret("HOPSWORKS_API_KEY"),
         host=get_secret("HOPSWORKS_HOST")
     )
+    print("[✓] Hopsworks connection established")
+    return project
 
 def get_hopsworks_models(project):
     """Load the LATEST trained models from Hopsworks Model Registry"""
@@ -436,12 +439,24 @@ def get_hopsworks_models(project):
 def load_forecast():
     """Load 3-day AQI forecast from Hopsworks models"""
     try:
+        print("\n" + "="*70)
+        print("[INFO] Starting forecast load...")
+        print("="*70)
+        
         project = get_hopsworks_project()
+        print("[✓] Project connected")
+        
         clf_24, clf_48, clf_72 = get_hopsworks_models(project)
+        print("[✓] Models loaded")
 
         fs = project.get_feature_store()
+        print("[✓] Feature store connected")
+        
         fg = fs.get_feature_group("aqi_features", version=7)
+        print("[✓] Feature group accessed")
+        
         df = fg.read()
+        print(f"[✓] Read {len(df)} rows from feature store")
 
         df["timestamp"] = pd.to_datetime(
             df["timestamp"],
@@ -548,6 +563,7 @@ def load_forecast():
         print("="*70 + "\n")
 
         # Make predictions
+        print("[INFO] Making predictions...")
         pred_24 = float(
             clf_24.predict(X)[0]
         )
@@ -559,6 +575,7 @@ def load_forecast():
         pred_72 = float(
             clf_72.predict(X)[0]
         )
+        print("[✓] Predictions made successfully")
 
         # Debug information
         print("===== AQI FORECAST DEBUG =====")
@@ -618,6 +635,11 @@ def load_forecast():
         ]
 
     except Exception as exc:
+        print(f"\n[ERROR] Forecast load failed: {exc}")
+        print(f"[ERROR] Exception type: {type(exc).__name__}")
+        import traceback
+        traceback.print_exc()
+        
         st.warning(
             f"Could not load live model predictions. ({exc})"
         )
