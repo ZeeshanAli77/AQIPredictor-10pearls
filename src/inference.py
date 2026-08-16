@@ -62,6 +62,12 @@ def load_latest_features() -> pd.DataFrame:
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df.sort_values("timestamp")
     
+    # DEBUG: Print what was fetched
+    print(f"\n[DEBUG] Offline store fetch:")
+    print(f"  Total rows: {len(df)}")
+    print(f"  Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+    print(f"  Latest AQI value: {df['aqi'].iloc[-1] if len(df) > 0 else 'N/A'}")
+    
     # DEBUG: Check what data was actually fetched
     print(f"\n[DEBUG] Total rows fetched: {len(df)}")
     print(f"[DEBUG] Earliest timestamp: {df['timestamp'].min()}")
@@ -95,14 +101,16 @@ def load_latest_features() -> pd.DataFrame:
 
 
 def load_best_model(target: str) -> object:
+    """Load the best model for a given target from Hopsworks Model Registry."""
     if not HOPSWORKS_API_KEY:
-        raise RuntimeError("HOPSWORKS_API_KEY is missing.")
+        raise RuntimeError("HOPSWORKS_API_KEY is missing. Set it in your environment.")
     
     project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
     mr = project.get_model_registry()
     model = mr.get_best_model(f"aqi_predictor_{target}", metric="rmse", direction="min")
-    model.clear_cache()  # ← FORCE fresh download, don't use cache
     model_dir = model.download()
+    
+    # Load the pipeline (includes scaler + model)
     return joblib.load(os.path.join(model_dir, f"aqi_{target}_model.pkl"))
 
 
