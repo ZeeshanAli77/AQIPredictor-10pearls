@@ -310,6 +310,7 @@ def get_aqi_gauge(value: float) -> go.Figure:
 
 @st.cache_data(ttl=3600)
 def load_current_aqi():
+    """Cache current AQI from AQICN for 1 hour."""
     token = get_secret("AQICN_TOKEN")
     if not token:
         return {
@@ -342,68 +343,58 @@ def load_current_aqi():
         "updated": data.get("time", {}).get("s", ""),
     }
 
+
+# ⚠️ KEY FIX: No caching on model/forecast loading - always get fresh models
 def get_hopsworks_project():
-    """Cache the Hopsworks project connection"""
+    """Fresh Hopsworks connection (NOT cached)."""
     return hopsworks.login(
         api_key_value=get_secret("HOPSWORKS_API_KEY"),
         host=get_secret("HOPSWORKS_HOST")
     )
 
-def get_hopsworks_models(project):
-    """Load the trained models from Hopsworks Model Registry"""
 
+def get_hopsworks_models(project):
+    """Load the trained models from Hopsworks Model Registry (fresh, NOT cached)."""
     mr = project.get_model_registry()
 
+    # Load 24h model
     model_24 = mr.get_best_model(
         "aqi_predictor_target_aqi_24h",
         metric="rmse",
         direction="min"
     )
-
     saved_model_dir_24 = model_24.download()
-
     clf_24 = joblib.load(
-        os.path.join(
-            saved_model_dir_24,
-            "aqi_target_aqi_24h_model.pkl"
-        )
+        os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_model.pkl")
     )
 
+    # Load 48h model
     model_48 = mr.get_best_model(
         "aqi_predictor_target_aqi_48h",
         metric="rmse",
         direction="min"
     )
-
     saved_model_dir_48 = model_48.download()
-
     clf_48 = joblib.load(
-        os.path.join(
-            saved_model_dir_48,
-            "aqi_target_aqi_48h_model.pkl"
-        )
+        os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_model.pkl")
     )
 
+    # Load 72h model
     model_72 = mr.get_best_model(
         "aqi_predictor_target_aqi_72h",
         metric="rmse",
         direction="min"
     )
-
     saved_model_dir_72 = model_72.download()
-
     clf_72 = joblib.load(
-        os.path.join(
-            saved_model_dir_72,
-            "aqi_target_aqi_72h_model.pkl"
-        )
+        os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_model.pkl")
     )
 
     return clf_24, clf_48, clf_72
 
 
 def load_forecast():
-    """Load 3-day AQI forecast from Hopsworks models"""
+    """Load 3-day AQI forecast from Hopsworks models (FRESH every load)."""
     try:
         project = get_hopsworks_project()
         clf_24, clf_48, clf_72 = get_hopsworks_models(project)
@@ -516,41 +507,19 @@ def load_forecast():
         print(f"Data age: {data_age_minutes:.1f} minutes")
         print("="*70 + "\n")
 
-        # Make predictions
-        pred_24 = float(
-            clf_24.predict(X)[0]
-        )
-
-        pred_48 = float(
-            clf_48.predict(X)[0]
-        )
-
-        pred_72 = float(
-            clf_72.predict(X)[0]
-        )
+        # Make predictions - scaler applied automatically by pipeline
+        print("[DEBUG] Making predictions with loaded models (with scaler)...")
+        pred_24 = float(clf_24.predict(X)[0])
+        pred_48 = float(clf_48.predict(X)[0])
+        pred_72 = float(clf_72.predict(X)[0])
 
         # Debug information
         print("===== AQI FORECAST DEBUG =====")
-        print(
-            "Latest timestamp:",
-            latest["timestamp"].iloc[0]
-        )
-        print(
-            "Latest actual AQI:",
-            latest["aqi"].iloc[0]
-        )
-        print(
-            "24h prediction:",
-            pred_24
-        )
-        print(
-            "48h prediction:",
-            pred_48
-        )
-        print(
-            "72h prediction:",
-            pred_72
-        )
+        print(f"Latest timestamp: {latest['timestamp'].iloc[0]}")
+        print(f"Latest actual AQI: {latest['aqi'].iloc[0]}")
+        print(f"24h prediction: {pred_24}")
+        print(f"48h prediction: {pred_48}")
+        print(f"72h prediction: {pred_72}")
         print("==============================")
 
         # Generate forecast dates
@@ -587,6 +556,7 @@ def load_forecast():
         ]
 
     except Exception as exc:
+        print(f"[ERROR] Model load failed: {exc}")
         st.warning(
             f"Could not load live model predictions. ({exc})"
         )
