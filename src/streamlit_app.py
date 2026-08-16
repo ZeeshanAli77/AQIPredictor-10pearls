@@ -359,32 +359,46 @@ def get_hopsworks_models(project):
     mr = project.get_model_registry()
 
     def load_latest_model(model_name: str, pkl_filename: str) -> tuple:
-        """Get the latest version of a model and load it"""
-        model = mr.get_model(model_name)
+        """Get the latest version of a model by querying versions 1-200"""
         
-        # Get all available versions
-        all_versions = model.get_all_versions()
+        latest_version = None
+        latest_version_num = None
         
-        if not all_versions:
-            raise RuntimeError(f"No versions found for model: {model_name}")
+        # Try versions from 200 down to 1 to find the highest that exists
+        print(f"🔍 Finding latest version of {model_name}...")
         
-        # Get the latest version (highest version number)
-        latest_version = max(all_versions, key=lambda v: v.version)
-        version_num = latest_version.version
+        for version_num in range(200, 0, -1):
+            try:
+                # Try to get this specific version
+                model_version = mr.get_model(model_name, version=version_num)
+                latest_version = model_version
+                latest_version_num = version_num
+                print(f"✓ Found {model_name} version {version_num}")
+                break  # Found the latest, stop searching
+            except Exception:
+                # This version doesn't exist, try the next lower one
+                continue
         
-        print(f"✓ Loading {model_name} version {version_num}")
+        if latest_version is None:
+            raise RuntimeError(
+                f"Could not find any version of model {model_name}. "
+                "Make sure the model exists in Hopsworks."
+            )
         
-        # Download the latest model
+        # Download and load the model
         saved_model_dir = latest_version.download()
         
-        # Load the model
         clf = joblib.load(
             os.path.join(saved_model_dir, pkl_filename)
         )
         
-        return clf, version_num
+        return clf, latest_version_num
 
     # Load all three models with their latest versions
+    print("\n" + "="*70)
+    print("📦 LOADING LATEST MODELS FROM HOPSWORKS")
+    print("="*70)
+    
     clf_24, v24 = load_latest_model(
         "aqi_predictor_target_aqi_24h",
         "aqi_target_aqi_24h_model.pkl"
@@ -400,8 +414,7 @@ def get_hopsworks_models(project):
         "aqi_target_aqi_72h_model.pkl"
     )
     
-    print(f"\n{'='*70}")
-    print(f"✓ LOADED LATEST MODELS FROM HOPSWORKS")
+    print(f"\n✅ LOADED LATEST MODELS FROM HOPSWORKS")
     print(f"  📦 24h forecast model: v{v24}")
     print(f"  📦 48h forecast model: v{v48}")
     print(f"  📦 72h forecast model: v{v72}")
