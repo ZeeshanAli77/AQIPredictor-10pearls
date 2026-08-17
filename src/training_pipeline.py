@@ -137,9 +137,16 @@ def evaluate_model(model, X_val, y_val) -> dict:
 
 def train_models(X_train, y_train, X_val, y_val, target_name: str):
     """
-    Train multiple models WITHOUT scaling in pipelines.
-    Models learn raw feature -> raw AQI (0-300) mapping directly.
+    Train models with target normalization for consistency.
+    Both features AND targets are normalized 0-1.
     """
+    from sklearn.preprocessing import StandardScaler
+    
+    # Normalize target
+    target_scaler = StandardScaler()
+    y_train_scaled = target_scaler.fit_transform(y_train.values.reshape(-1, 1)).ravel()
+    y_val_scaled = target_scaler.transform(y_val.values.reshape(-1, 1)).ravel()
+    
     models = {
         "ridge": Ridge(alpha=1.0),
         "random_forest": RandomForestRegressor(
@@ -163,15 +170,21 @@ def train_models(X_train, y_train, X_val, y_val, target_name: str):
     results = {}
     for name, model in models.items():
         print(f"  Training {name} for {target_name}...")
-        model.fit(X_train, y_train)
-        metrics = evaluate_model(model, X_val, y_val)
-        results[name] = {"model": model, "metrics": metrics}
+        model.fit(X_train, y_train_scaled)  # Train on SCALED targets
+        
+        # Evaluate on scaled targets
+        preds_scaled = model.predict(X_val)
+        metrics = {
+            "rmse": round(float(np.sqrt(mean_squared_error(y_val_scaled, preds_scaled))), 4),
+            "mae": round(float(mean_absolute_error(y_val_scaled, preds_scaled)), 4),
+            "r2": round(float(r2_score(y_val_scaled, preds_scaled)), 4),
+        }
+        results[name] = {"model": model, "metrics": metrics, "scaler": target_scaler}
         print(f"    RMSE={metrics['rmse']}, MAE={metrics['mae']}, R2={metrics['r2']}")
 
     best_name = min(results, key=lambda k: results[k]["metrics"]["rmse"])
     print(f"  Best model for {target_name}: {best_name}")
-    return results[best_name]["model"], results[best_name]["metrics"], best_name
-
+    return results[best_name]["model"], results[best_name]["metrics"], best_name, results[best_name]["scaler"]
 
 def compute_shap_values(model, X_val: pd.DataFrame, model_name: str):
     """Compute and save SHAP feature importance plot."""
@@ -197,12 +210,17 @@ def compute_shap_values(model, X_val: pd.DataFrame, model_name: str):
         print(f"  SHAP warning: {exc}")
 
 
-def register_model(project, model, model_name: str, metrics: dict, target: str, feature_cols: list):
+def register_model(project, model, model_name: str, metrics: dict, target: str, feature_cols: list, target_scaler=None):
     """Save model artifacts and register in Hopsworks Model Registry."""
     os.makedirs("model_artifacts", exist_ok=True)
 
     model_path = f"model_artifacts/aqi_{target}_model.pkl"
     joblib.dump(model, model_path)
+    
+    # SAVE TARGET SCALER
+    if target_scaler:
+        scaler_path = f"model_artifacts/aqi_{target}_target_scaler.pkl"
+        joblib.dump(target_scaler, scaler_path)
 
     meta = {
         "model_name": model_name,
@@ -211,7 +229,7 @@ def register_model(project, model, model_name: str, metrics: dict, target: str, 
         "metrics": metrics,
         "trained_at": datetime.utcnow().isoformat(),
         "city": "islamabad_rawalpindi",
-        "note": "Model trained without scaling - outputs raw AQI 0-300 values.",
+        "note": "Model trained with normalized targets (StandardScaler). Use target_scaler for inverse transform.",
     }
     with open("model_artifacts/metadata.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
@@ -220,7 +238,7 @@ def register_model(project, model, model_name: str, metrics: dict, target: str, 
     hw_model = mr.sklearn.create_model(
         name=f"aqi_predictor_{target}",
         metrics=metrics,
-        description=f"AQI {target} prediction | {model_name} | Islamabad/Rawalpindi | No scaling",
+        description=f"AQI {target} prediction | {model_name} | Islamabad/Rawalpindi | Target normalized",
         input_example=pd.DataFrame([{col: 0.0 for col in feature_cols}]),
         feature_view=None,
     )
@@ -290,21 +308,21 @@ def run_training_pipeline():
     all_metrics = {}
 
     for target in TARGET_COLS:
-        print("=" * 50)
-        print(f"Training for target: {target}")
-        y_train = train_df[target]
-        y_val = val_df[target]
+    print("=" * 50)
+    print(f"Training for target: {target}")
+    y_train = train_df[target]
+    y_val = val_df[target]
 
-        best_model, metrics, best_name = train_models(
-            X_train, y_train, X_val, y_val, target
-        )
-        all_metrics[target] = {**metrics, "model_type": best_name}
+    best_model, metrics, best_name, target_scaler = train_models(
+        X_train, y_train, X_val, y_val, target
+    )
+    all_metrics[target] = {**metrics, "model_type": best_name}
 
-        if target == "target_aqi_24h":
-            compute_shap_values(best_model, X_val, best_name)
+    if target == "target_aqi_24h":
+        compute_shap_values(best_model, X_val, best_name)
 
-        project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
-        register_model(project, best_model, best_name, metrics, target, FEATURE_COLS)
+    project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
+    register_model(project, best_model, best_name, metrics, target, FEATURE_COLS, target_scaler)  # Pass scaler
 
     print("=== TRAINING SUMMARY ===")
     for target, metrics in all_metrics.items():
