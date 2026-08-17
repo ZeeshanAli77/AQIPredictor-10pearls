@@ -142,43 +142,25 @@ def train_models(X_train, y_train, X_val, y_val, target_name: str):
     Train multiple models with proper scaling in pipelines.
     All models now wrapped in Pipeline with StandardScaler for consistency.
     """
-    models = {
-        "ridge": Pipeline(
-            [("scaler", StandardScaler()), ("model", Ridge(alpha=1.0))]
-        ),
-        "random_forest": Pipeline(
-            [
-                ("scaler", StandardScaler()),
-                (
-                    "model",
-                    RandomForestRegressor(
-                        n_estimators=200,
-                        max_depth=15,
-                        min_samples_leaf=5,
-                        n_jobs=-1,
-                        random_state=42,
-                    ),
-                ),
-            ]
-        ),
-        "xgboost": Pipeline(
-            [
-                ("scaler", StandardScaler()),
-                (
-                    "model",
-                    xgb.XGBRegressor(
-                        n_estimators=300,
-                        max_depth=6,
-                        learning_rate=0.05,
-                        subsample=0.8,
-                        colsample_bytree=0.8,
-                        random_state=42,
-                        tree_method="hist",
-                    ),
-                ),
-            ]
-        ),
-    }
+models = {
+    "ridge": Ridge(alpha=1.0),
+    "random_forest": RandomForestRegressor(
+        n_estimators=200,
+        max_depth=15,
+        min_samples_leaf=5,
+        n_jobs=-1,
+        random_state=42,
+    ),
+    "xgboost": xgb.XGBRegressor(
+        n_estimators=300,
+        max_depth=6,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        tree_method="hist",
+    ),
+}
 
     results = {}
     for name, model in models.items():
