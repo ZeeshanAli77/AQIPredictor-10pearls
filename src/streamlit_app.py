@@ -358,51 +358,38 @@ def get_hopsworks_project():
 
 
 def get_hopsworks_models(project):
-    """Load the trained models from Hopsworks Model Registry (fresh, NOT cached)."""
+    """Load the trained models AND their target scalers from Hopsworks Model Registry."""
     mr = project.get_model_registry()
+    scalers = {}
 
-    # Load 24h model
-    model_24 = mr.get_best_model(
-        "aqi_predictor_target_aqi_24h",
-        metric="rmse",
-        direction="min"
-    )
+    # Load 24h model + scaler
+    model_24 = mr.get_best_model("aqi_predictor_target_aqi_24h", metric="rmse", direction="min")
     saved_model_dir_24 = model_24.download()
-    clf_24 = joblib.load(
-        os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_model.pkl")
-    )
+    clf_24 = joblib.load(os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_model.pkl"))
+    scaler_24 = joblib.load(os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_target_scaler.pkl"))
+    scalers["24h"] = scaler_24
 
-    # Load 48h model
-    model_48 = mr.get_best_model(
-        "aqi_predictor_target_aqi_48h",
-        metric="rmse",
-        direction="min"
-    )
+    # Load 48h model + scaler
+    model_48 = mr.get_best_model("aqi_predictor_target_aqi_48h", metric="rmse", direction="min")
     saved_model_dir_48 = model_48.download()
-    clf_48 = joblib.load(
-        os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_model.pkl")
-    )
+    clf_48 = joblib.load(os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_model.pkl"))
+    scaler_48 = joblib.load(os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_target_scaler.pkl"))
+    scalers["48h"] = scaler_48
 
-    # Load 72h model
-    model_72 = mr.get_best_model(
-        "aqi_predictor_target_aqi_72h",
-        metric="rmse",
-        direction="min"
-    )
+    # Load 72h model + scaler
+    model_72 = mr.get_best_model("aqi_predictor_target_aqi_72h", metric="rmse", direction="min")
     saved_model_dir_72 = model_72.download()
-    clf_72 = joblib.load(
-        os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_model.pkl")
-    )
+    clf_72 = joblib.load(os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_model.pkl"))
+    scaler_72 = joblib.load(os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_target_scaler.pkl"))
+    scalers["72h"] = scaler_72
 
-    return clf_24, clf_48, clf_72
-
+    return clf_24, clf_48, clf_72, scalers
 
 def load_forecast():
     """Load 3-day AQI forecast from Hopsworks models (FRESH every load)."""
     try:
         project = get_hopsworks_project()
-        clf_24, clf_48, clf_72 = get_hopsworks_models(project)
-
+        clf_24, clf_48, clf_72, scalers = get_hopsworks_models(project)
         fs = project.get_feature_store()
         fg = fs.get_feature_group("aqi_features", version=7)
         df = fg.read()
@@ -512,23 +499,24 @@ def load_forecast():
         print("="*70 + "\n")
 
         # Make predictions - INVERSE TRANSFORM from normalized 0-1 back to 12-137 range
+               # Make predictions and INVERSE TRANSFORM
         print("[DEBUG] Making predictions with loaded models...")
-        pred_24_raw = float(clf_24.predict(X)[0])
-        pred_48_raw = float(clf_48.predict(X)[0])
-        pred_72_raw = float(clf_72.predict(X)[0])
+        pred_24_scaled = float(clf_24.predict(X)[0])
+        pred_48_scaled = float(clf_48.predict(X)[0])
+        pred_72_scaled = float(clf_72.predict(X)[0])
         
-        # Inverse transform: output * (max - min) + min
-        pred_24 = pred_24_raw * (MAX_AQI - MIN_AQI) + MIN_AQI
-        pred_48 = pred_48_raw * (MAX_AQI - MIN_AQI) + MIN_AQI
-        pred_72 = pred_72_raw * (MAX_AQI - MIN_AQI) + MIN_AQI
+        # Inverse transform using the saved scalers
+        pred_24 = float(scalers["24h"].inverse_transform([[pred_24_scaled]])[0][0])
+        pred_48 = float(scalers["48h"].inverse_transform([[pred_48_scaled]])[0][0])
+        pred_72 = float(scalers["72h"].inverse_transform([[pred_72_scaled]])[0][0])
 
         # Debug information
         print("===== AQI FORECAST DEBUG =====")
         print(f"Latest timestamp: {latest['timestamp'].iloc[0]}")
         print(f"Latest actual AQI: {latest['aqi'].iloc[0]}")
-        print(f"24h prediction (raw): {pred_24_raw:.4f} -> (inverse transform): {pred_24:.1f}")
-        print(f"48h prediction (raw): {pred_48_raw:.4f} -> (inverse transform): {pred_48:.1f}")
-        print(f"72h prediction (raw): {pred_72_raw:.4f} -> (inverse transform): {pred_72:.1f}")
+        print(f"24h prediction (scaled): {pred_24_scaled:.4f} -> (inverse): {pred_24:.1f}")
+        print(f"48h prediction (scaled): {pred_48_scaled:.4f} -> (inverse): {pred_48:.1f}")
+        print(f"72h prediction (scaled): {pred_72_scaled:.4f} -> (inverse): {pred_72:.1f}")
         print("==============================")
 
         # Generate forecast dates
