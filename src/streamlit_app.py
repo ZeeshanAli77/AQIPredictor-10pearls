@@ -498,13 +498,12 @@ def load_forecast():
         print(f"Data age: {data_age_minutes:.1f} minutes")
         print("="*70 + "\n")
 
-        # Make predictions - INVERSE TRANSFORM from normalized 0-1 back to 12-137 range
-               # Make predictions and INVERSE TRANSFORM
+        # Make predictions and INVERSE TRANSFORM
         print("[DEBUG] Making predictions with loaded models...")
         pred_24_scaled = float(clf_24.predict(X)[0])
         pred_48_scaled = float(clf_48.predict(X)[0])
         pred_72_scaled = float(clf_72.predict(X)[0])
-        
+
         # Inverse transform using the saved scalers
         pred_24 = float(scalers["24h"].inverse_transform([[pred_24_scaled]])[0][0])
         pred_48 = float(scalers["48h"].inverse_transform([[pred_48_scaled]])[0][0])
@@ -597,7 +596,7 @@ def main():
         st.cache_data.clear()
         st.cache_resource.clear()
         st.rerun()
-    
+
     # Header
     st.markdown("""
         <div class="header-banner">
@@ -606,7 +605,7 @@ def main():
             <div class="developer-tag">🔬 Developed by Zeeshan</div>
         </div>
     """, unsafe_allow_html=True)
-    
+
     with st.spinner("🔄 Loading real-time data..."):
         current = load_current_aqi()
         forecast = load_forecast()
@@ -616,10 +615,10 @@ def main():
     # Current AQI - Prominent Display
     st.markdown("### 📊 Current Air Quality")
     col_gauge, col_info = st.columns([1.2, 1])
-    
+
     with col_gauge:
         st.plotly_chart(get_aqi_gauge(current["aqi"]), use_container_width=True)
-    
+
     with col_info:
         st.markdown(f"""
             <div class="aqi-current-card">
@@ -639,7 +638,7 @@ def main():
     # Environmental Metrics
     st.markdown("### 🌡️ Air & Weather Conditions")
     m1, m2, m3, m4, m5, m6 = st.columns(6)
-    
+
     metrics = [
         (m1, "PM2.5", f"{current['pm25']:.1f}", "µg/m³"),
         (m2, "PM10", f"{current['pm10']:.1f}", "µg/m³"),
@@ -648,7 +647,7 @@ def main():
         (m5, "💧 RH", f"{current['humidity']:.0f}", "%"),
         (m6, "💨 Wind", f"{current['wind']:.1f}", "m/s"),
     ]
-    
+
     for col, label, value, unit in metrics:
         with col:
             st.markdown(f"""
@@ -664,12 +663,12 @@ def main():
     # 72-Hour Forecast
     st.markdown("### 📈 3-Day AQI Forecast")
     st.markdown("*Predictions automatically update daily with new data*")
-    
+
     cols = st.columns(3, gap="large")
     for i, day in enumerate(cols):
         forecast_data = forecast[i]
         lbl, clr, day_advice = classify_aqi(forecast_data["aqi"])
-        
+
         with day:
             st.markdown(f"""
                 <div class="forecast-card" style="border-color: {clr}40;">
@@ -687,7 +686,7 @@ def main():
     # Forecast Chart
     st.markdown("### 📉 Prediction Trend")
     forecast_df = pd.DataFrame([{"Date": d["full_date"], "AQI": d["aqi"]} for d in forecast])
-    
+
     fig = px.bar(
         forecast_df,
         x="Date",
@@ -698,12 +697,12 @@ def main():
         height=400,
         title="Next 72 Hours - Predicted AQI Values with Health Thresholds"
     )
-    
+
     fig.add_hline(y=100, line_dash="dash", line_color="#f59e0b", line_width=2,
                   annotation_text="Moderate (100)", annotation_position="right")
     fig.add_hline(y=150, line_dash="dash", line_color="#ef4444", line_width=2,
                   annotation_text="Unhealthy (150)", annotation_position="right")
-    
+
     fig.update_layout(
         hovermode="x unified",
         paper_bgcolor="rgba(15, 12, 41, 0.5)",
@@ -712,16 +711,16 @@ def main():
         xaxis={"showgrid": False},
         yaxis={"showgrid": True, "gridwidth": 1, "gridcolor": "rgba(255, 255, 255, 0.1)"},
     )
-    
+
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
 
     # Health Alerts
     st.markdown("### ⚠️ Health Alerts & Recommendations")
-    
+
     max_forecast = max(d["aqi"] for d in forecast)
-    
+
     if max_forecast > 150:
         alert_class = "alert-box-danger"
         alert_msg = "🚨 **UNHEALTHY CONDITIONS FORECASTED** - Avoid outdoor activities, use N95 masks, keep windows closed."
@@ -731,7 +730,7 @@ def main():
     else:
         alert_class = "alert-box-good"
         alert_msg = "✅ **GOOD AIR QUALITY** - Outdoor activities should be safe for most people."
-    
+
     st.markdown(f'<div class="info-box {alert_class}">{alert_msg}</div>', unsafe_allow_html=True)
 
     if os.path.exists("artifacts/shap_summary.png"):
