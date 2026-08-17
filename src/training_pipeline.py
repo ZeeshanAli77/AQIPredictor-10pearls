@@ -1,6 +1,6 @@
 """
 Training Pipeline: Train, evaluate, and register AQI prediction models.
-FIXED: All models now use StandardScaler in pipelines for consistency.
+FIXED: All models now train WITHOUT StandardScaler for direct 0-300 AQI outputs.
 Runs daily via GitHub Actions.
 """
 
@@ -19,8 +19,6 @@ import xgboost as xgb
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 
 import hopsworks
 from dotenv import load_dotenv
@@ -139,28 +137,28 @@ def evaluate_model(model, X_val, y_val) -> dict:
 
 def train_models(X_train, y_train, X_val, y_val, target_name: str):
     """
-    Train multiple models with proper scaling in pipelines.
-    All models now wrapped in Pipeline with StandardScaler for consistency.
+    Train multiple models WITHOUT scaling in pipelines.
+    Models learn raw feature -> raw AQI (0-300) mapping directly.
     """
-models = {
-    "ridge": Ridge(alpha=1.0),
-    "random_forest": RandomForestRegressor(
-        n_estimators=200,
-        max_depth=15,
-        min_samples_leaf=5,
-        n_jobs=-1,
-        random_state=42,
-    ),
-    "xgboost": xgb.XGBRegressor(
-        n_estimators=300,
-        max_depth=6,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=42,
-        tree_method="hist",
-    ),
-}
+    models = {
+        "ridge": Ridge(alpha=1.0),
+        "random_forest": RandomForestRegressor(
+            n_estimators=200,
+            max_depth=15,
+            min_samples_leaf=5,
+            n_jobs=-1,
+            random_state=42,
+        ),
+        "xgboost": xgb.XGBRegressor(
+            n_estimators=300,
+            max_depth=6,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            tree_method="hist",
+        ),
+    }
 
     results = {}
     for name, model in models.items():
@@ -179,21 +177,15 @@ def compute_shap_values(model, X_val: pd.DataFrame, model_name: str):
     """Compute and save SHAP feature importance plot."""
     print("  Computing SHAP values...")
     try:
-        # Extract the actual model from the pipeline
-        if hasattr(model, "named_steps"):
-            actual_model = model.named_steps["model"]
-            scaler = model.named_steps["scaler"]
-            X_val_scaled = scaler.transform(X_val)
-        else:
-            actual_model = model
-            X_val_scaled = X_val
+        # Model is no longer in a pipeline, use directly
+        actual_model = model
 
         if model_name in ("xgboost", "random_forest"):
             explainer = shap.TreeExplainer(actual_model)
-            shap_values = explainer.shap_values(X_val_scaled)
+            shap_values = explainer.shap_values(X_val)
         else:
-            explainer = shap.LinearExplainer(actual_model, X_val_scaled)
-            shap_values = explainer.shap_values(X_val_scaled)
+            explainer = shap.LinearExplainer(actual_model, X_val)
+            shap_values = explainer.shap_values(X_val)
 
         shap.summary_plot(shap_values, X_val, show=False, max_display=15)
         plt.tight_layout()
@@ -219,7 +211,7 @@ def register_model(project, model, model_name: str, metrics: dict, target: str, 
         "metrics": metrics,
         "trained_at": datetime.utcnow().isoformat(),
         "city": "islamabad_rawalpindi",
-        "note": "Model includes StandardScaler in pipeline for proper scaling.",
+        "note": "Model trained without scaling - outputs raw AQI 0-300 values.",
     }
     with open("model_artifacts/metadata.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
@@ -228,7 +220,7 @@ def register_model(project, model, model_name: str, metrics: dict, target: str, 
     hw_model = mr.sklearn.create_model(
         name=f"aqi_predictor_{target}",
         metrics=metrics,
-        description=f"AQI {target} prediction | {model_name} | Islamabad/Rawalpindi | Scaled",
+        description=f"AQI {target} prediction | {model_name} | Islamabad/Rawalpindi | No scaling",
         input_example=pd.DataFrame([{col: 0.0 for col in feature_cols}]),
         feature_view=None,
     )
