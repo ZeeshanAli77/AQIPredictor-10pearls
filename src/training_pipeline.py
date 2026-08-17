@@ -141,12 +141,12 @@ def train_models(X_train, y_train, X_val, y_val, target_name: str):
     Both features AND targets are normalized 0-1.
     """
     from sklearn.preprocessing import StandardScaler
-    
+
     # Normalize target
     target_scaler = StandardScaler()
     y_train_scaled = target_scaler.fit_transform(y_train.values.reshape(-1, 1)).ravel()
     y_val_scaled = target_scaler.transform(y_val.values.reshape(-1, 1)).ravel()
-    
+
     models = {
         "ridge": Ridge(alpha=1.0),
         "random_forest": RandomForestRegressor(
@@ -171,7 +171,7 @@ def train_models(X_train, y_train, X_val, y_val, target_name: str):
     for name, model in models.items():
         print(f"  Training {name} for {target_name}...")
         model.fit(X_train, y_train_scaled)  # Train on SCALED targets
-        
+
         # Evaluate on scaled targets
         preds_scaled = model.predict(X_val)
         metrics = {
@@ -185,6 +185,7 @@ def train_models(X_train, y_train, X_val, y_val, target_name: str):
     best_name = min(results, key=lambda k: results[k]["metrics"]["rmse"])
     print(f"  Best model for {target_name}: {best_name}")
     return results[best_name]["model"], results[best_name]["metrics"], best_name, results[best_name]["scaler"]
+
 
 def compute_shap_values(model, X_val: pd.DataFrame, model_name: str):
     """Compute and save SHAP feature importance plot."""
@@ -216,7 +217,7 @@ def register_model(project, model, model_name: str, metrics: dict, target: str, 
 
     model_path = f"model_artifacts/aqi_{target}_model.pkl"
     joblib.dump(model, model_path)
-    
+
     # SAVE TARGET SCALER
     if target_scaler:
         scaler_path = f"model_artifacts/aqi_{target}_target_scaler.pkl"
@@ -255,9 +256,9 @@ def run_training_pipeline():
     print(f"  Total samples before cleanup: {len(df)}")
 
     # DEBUG: Data distribution BEFORE dropna
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("[DEBUG] TRAINING DATA STATISTICS (BEFORE DROPNA):")
-    print("="*70)
+    print("=" * 70)
     print(f"Total samples: {len(df)}")
     print(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
     print(f"\nAQI Statistics (input feature):")
@@ -265,7 +266,7 @@ def run_training_pipeline():
     print(f"  Mean: {df['aqi'].mean():.1f}, Median: {df['aqi'].median():.1f}")
     print(f"  Std Dev: {df['aqi'].std():.1f}")
     print(f"  NaN count: {df['aqi'].isna().sum()}")
-    
+
     for target in TARGET_COLS:
         if target in df.columns:
             print(f"\n{target} Statistics:")
@@ -273,34 +274,34 @@ def run_training_pipeline():
             print(f"  Mean: {df[target].mean():.1f}, Median: {df[target].median():.1f}")
             print(f"  Std Dev: {df[target].std():.1f}")
             print(f"  NaN count: {df[target].isna().sum()}")
-    
+
     print("\nFeature NaN Counts (sample):")
     for col in FEATURE_COLS[:5]:
         print(f"  {col}: {df[col].isna().sum()} NaNs")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     df = df.dropna(subset=FEATURE_COLS + TARGET_COLS)
-    
+
     # DEBUG: Data distribution AFTER dropna
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("[DEBUG] TRAINING DATA STATISTICS (AFTER DROPNA):")
-    print("="*70)
+    print("=" * 70)
     print(f"Total samples: {len(df)}")
     print(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
     print(f"\nAQI Statistics (cleaned):")
     print(f"  Range: {df['aqi'].min():.1f} — {df['aqi'].max():.1f}")
     print(f"  Mean: {df['aqi'].mean():.1f}, Median: {df['aqi'].median():.1f}")
     print(f"  Std Dev: {df['aqi'].std():.1f}")
-    
+
     for target in TARGET_COLS:
         if target in df.columns:
             print(f"\n{target} Statistics:")
             print(f"  Range: {df[target].min():.1f} — {df[target].max():.1f}")
             print(f"  Mean: {df[target].mean():.1f}, Median: {df[target].median():.1f}")
-    
+
     train_df, val_df = split_time_series(df)
     print(f"\nTrain/Val split: {len(train_df)} train, {len(val_df)} val")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     X_train = train_df[FEATURE_COLS]
     X_val = val_df[FEATURE_COLS]
@@ -308,21 +309,21 @@ def run_training_pipeline():
     all_metrics = {}
 
     for target in TARGET_COLS:
-    print("=" * 50)
-    print(f"Training for target: {target}")
-    y_train = train_df[target]
-    y_val = val_df[target]
+        print("=" * 50)
+        print(f"Training for target: {target}")
+        y_train = train_df[target]
+        y_val = val_df[target]
 
-    best_model, metrics, best_name, target_scaler = train_models(
-        X_train, y_train, X_val, y_val, target
-    )
-    all_metrics[target] = {**metrics, "model_type": best_name}
+        best_model, metrics, best_name, target_scaler = train_models(
+            X_train, y_train, X_val, y_val, target
+        )
+        all_metrics[target] = {**metrics, "model_type": best_name}
 
-    if target == "target_aqi_24h":
-        compute_shap_values(best_model, X_val, best_name)
+        if target == "target_aqi_24h":
+            compute_shap_values(best_model, X_val, best_name)
 
-    project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
-    register_model(project, best_model, best_name, metrics, target, FEATURE_COLS, target_scaler)  # Pass scaler
+        project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
+        register_model(project, best_model, best_name, metrics, target, FEATURE_COLS, target_scaler)  # Pass scaler
 
     print("=== TRAINING SUMMARY ===")
     for target, metrics in all_metrics.items():
