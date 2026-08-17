@@ -35,6 +35,10 @@ CITY = CONFIG.get("city", {})
 LAT = CITY.get("latitude")
 LON = CITY.get("longitude")
 
+# AQI range from training data (12-137)
+MIN_AQI = 12.0
+MAX_AQI = 137.0
+
 st.set_page_config(
     page_title="Islamabad AQI Predictor - Zeeshan",
     page_icon="💨",
@@ -507,18 +511,24 @@ def load_forecast():
         print(f"Data age: {data_age_minutes:.1f} minutes")
         print("="*70 + "\n")
 
-        # Make predictions - scaler applied automatically by pipeline
-        print("[DEBUG] Making predictions with loaded models (with scaler)...")
-        pred_24 = float(clf_24.predict(X)[0]) 
-        pred_48 = float(clf_48.predict(X)[0])
-        pred_72 = float(clf_72.predict(X)[0])
+        # Make predictions - INVERSE TRANSFORM from normalized 0-1 back to 12-137 range
+        print("[DEBUG] Making predictions with loaded models...")
+        pred_24_raw = float(clf_24.predict(X)[0])
+        pred_48_raw = float(clf_48.predict(X)[0])
+        pred_72_raw = float(clf_72.predict(X)[0])
+        
+        # Inverse transform: output * (max - min) + min
+        pred_24 = pred_24_raw * (MAX_AQI - MIN_AQI) + MIN_AQI
+        pred_48 = pred_48_raw * (MAX_AQI - MIN_AQI) + MIN_AQI
+        pred_72 = pred_72_raw * (MAX_AQI - MIN_AQI) + MIN_AQI
+
         # Debug information
         print("===== AQI FORECAST DEBUG =====")
         print(f"Latest timestamp: {latest['timestamp'].iloc[0]}")
         print(f"Latest actual AQI: {latest['aqi'].iloc[0]}")
-        print(f"24h prediction: {pred_24}")
-        print(f"48h prediction: {pred_48}")
-        print(f"72h prediction: {pred_72}")
+        print(f"24h prediction (raw): {pred_24_raw:.4f} -> (inverse transform): {pred_24:.1f}")
+        print(f"48h prediction (raw): {pred_48_raw:.4f} -> (inverse transform): {pred_48:.1f}")
+        print(f"72h prediction (raw): {pred_72_raw:.4f} -> (inverse transform): {pred_72:.1f}")
         print("==============================")
 
         # Generate forecast dates
@@ -570,7 +580,7 @@ def load_forecast():
                 "full_date": (
                     today + timedelta(days=1)
                 ).strftime("%A, %B %d"),
-                "aqi": 145,
+                "aqi": 75,
             },
             {
                 "date": (
@@ -579,7 +589,7 @@ def load_forecast():
                 "full_date": (
                     today + timedelta(days=2)
                 ).strftime("%A, %B %d"),
-                "aqi": 130,
+                "aqi": 80,
             },
             {
                 "date": (
@@ -588,7 +598,7 @@ def load_forecast():
                 "full_date": (
                     today + timedelta(days=3)
                 ).strftime("%A, %B %d"),
-                "aqi": 110,
+                "aqi": 70,
             },
         ]
 
@@ -750,7 +760,7 @@ def main():
             <p><strong>Islamabad AQI Predictor</strong> | AI-Powered Environmental Intelligence</p>
             <p>
                 📡 Data: AQICN (Ground Sensors) | Open-Meteo (Weather) | Hopsworks (ML Feature Store)<br>
-                🤖 Models: Random Forest, Ridge Regression | 📊 Explainability: SHAP Values<br>
+                🤖 Models: XGBoost with Inverse Transform (12-137 AQI range) | 📊 Explainability: SHAP Values<br>
                 👨‍💻 Developed by Zeeshan | Updated Daily at 2 AM UTC
             </p>
         </div>
