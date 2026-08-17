@@ -509,10 +509,9 @@ def load_forecast():
 
         # Make predictions - scaler applied automatically by pipeline
         print("[DEBUG] Making predictions with loaded models (with scaler)...")
-        pred_24 = float(clf_24.predict(X)[0])
-        pred_48 = float(clf_48.predict(X)[0])
-        pred_72 = float(clf_72.predict(X)[0])
-
+        pred_24 = float(clf_24.predict(X)[0]) * 300
+        pred_48 = float(clf_48.predict(X)[0]) * 300
+        pred_72 = float(clf_72.predict(X)[0]) * 300
         # Debug information
         print("===== AQI FORECAST DEBUG =====")
         print(f"Latest timestamp: {latest['timestamp'].iloc[0]}")
