@@ -129,8 +129,35 @@ def make_predictions(X: pd.DataFrame, models_and_scalers: dict) -> dict:
     return predictions
 
 
+def add_time_series_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute lag and rolling features from raw AQI data.
+    Same logic as training pipeline.
+    """
+    df = df.sort_values("timestamp").copy()
+    df["aqi"] = pd.to_numeric(df["aqi"], errors="coerce")
+    
+    # Lag features
+    df["aqi_lag_1h"] = df["aqi"].shift(1)
+    df["aqi_lag_3h"] = df["aqi"].shift(3)
+    df["aqi_lag_6h"] = df["aqi"].shift(6)
+    df["aqi_lag_24h"] = df["aqi"].shift(24)
+    
+    # Change feature
+    df["aqi_change_1h"] = df["aqi"] - df["aqi_lag_1h"]
+    
+    # Rolling statistics
+    df["aqi_roll_3h"] = df["aqi"].rolling(3).mean()
+    df["aqi_roll_6h"] = df["aqi"].rolling(6).mean()
+    df["aqi_roll_24h"] = df["aqi"].rolling(24).mean()
+    df["aqi_roll_std"] = df["aqi"].rolling(6).std()
+    
+    return df
+
+
 def get_latest_features_from_store() -> pd.DataFrame:
-    """Fetch latest features from Hopsworks Feature Store.
+    """
+    Fetch latest features from Hopsworks Feature Store and compute lag features.
     
     Returns:
         pd.DataFrame: Latest row with all features ready for prediction
@@ -143,13 +170,20 @@ def get_latest_features_from_store() -> pd.DataFrame:
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df.sort_values("timestamp")
     
-    # Get latest row
+    # ✅ COMPUTE LAG FEATURES
+    print("[INFO] Computing lag and rolling features...")
+    df = add_time_series_features(df)
+    
+    # Get latest row with all computed features
     latest = df.tail(1)
     
     # Verify all features are present
     missing_cols = [col for col in FEATURE_COLS if col not in latest.columns]
     if missing_cols:
         raise ValueError(f"Missing features in latest data: {missing_cols}")
+    
+    print(f"[DEBUG] Latest timestamp: {latest['timestamp'].iloc[0]}")
+    print(f"[DEBUG] Latest AQI: {latest['aqi'].iloc[0]:.1f}")
     
     return latest[FEATURE_COLS]
 
@@ -176,6 +210,18 @@ def predict_aqi_forecast(X: pd.DataFrame = None) -> dict:
     # Ensure correct shape
     if isinstance(X, pd.DataFrame) and len(X) > 1:
         X = X.tail(1)
+    
+    # ✅ CHECK FOR NaN VALUES
+    nan_cols = X.columns[X.isna().any()].tolist()
+    if nan_cols:
+        print(f"[WARN] Found NaN values in features: {nan_cols}")
+        print(f"[INFO] Filling NaN with forward/backward fill...")
+        X = X.ffill().bfill()
+        
+        # Double-check
+        remaining_nans = X.columns[X.isna().any()].tolist()
+        if remaining_nans:
+            raise ValueError(f"Cannot fill NaN values in: {remaining_nans}")
     
     # Load models and scalers
     print("[INFO] Loading models and scalers from Hopsworks...")
