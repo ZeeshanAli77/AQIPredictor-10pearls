@@ -744,7 +744,7 @@ def main():
     # Footer
     st.markdown("""
         <div class="footer">
-            <p><strong>Islamabad AQI Predictor</strong> | AI-Powered Environmental Intelligence</p>
+            <p><strong>Islamabad AQI Predictor</strong> | AI-Powered Environmental Intelligence.</p>
             <p>
                 📡 Data: AQICN (Ground Sensors) | Open-Meteo (Weather) | Hopsworks (ML Feature Store)<br>
                 🤖 Models: XGBoost with Inverse Transform (12-137 AQI range) | 📊 Explainability: SHAP Values<br>
