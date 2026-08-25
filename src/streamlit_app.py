@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta, timezone
 
+import joblib
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -17,9 +18,6 @@ import streamlit as st
 import hopsworks
 from dotenv import load_dotenv
 import yaml
-
-# ✅ IMPORT FROM INFERENCE MODULE
-from inference import predict_aqi_forecast
 
 load_dotenv()
 
@@ -36,6 +34,10 @@ CONFIG = load_config()
 CITY = CONFIG.get("city", {})
 LAT = CITY.get("latitude")
 LON = CITY.get("longitude")
+
+# AQI range from training data (12-137)
+MIN_AQI = 12.0
+MAX_AQI = 137.0
 
 st.set_page_config(
     page_title="Islamabad AQI Predictor - Zeeshan",
@@ -259,11 +261,11 @@ AQI_LEVELS = [
 def get_secret(name: str) -> str:
     try:
         value = str(st.secrets[name])
-        print(f"✓ Got {name} from st.secrets")
+        print(f"✓ Got {name} from st.secrets: {value[:20] if len(value) > 20 else value}...")
         return value
     except Exception as e:
         value = os.getenv(name, "")
-        print(f"✗ st.secrets failed for {name}, using env")
+        print(f"✗ st.secrets failed for {name}, got from env: {value[:20] if value and len(value) > 20 else value}... (error: {e})")
         return value
 
 
@@ -346,57 +348,243 @@ def load_current_aqi():
     }
 
 
+# ⚠️ KEY FIX: No caching on model/forecast loading - always get fresh models
+def get_hopsworks_project():
+    """Fresh Hopsworks connection (NOT cached)."""
+    return hopsworks.login(
+        api_key_value=get_secret("HOPSWORKS_API_KEY"),
+        host=get_secret("HOPSWORKS_HOST")
+    )
+
+
+def get_hopsworks_models(project):
+    """Load the trained models AND their target scalers from Hopsworks Model Registry."""
+    mr = project.get_model_registry()
+    scalers = {}
+
+    # Load 24h model + scaler
+    model_24 = mr.get_best_model("aqi_predictor_target_aqi_24h", metric="rmse", direction="min")
+    saved_model_dir_24 = model_24.download()
+    clf_24 = joblib.load(os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_model.pkl"))
+    scaler_24 = joblib.load(os.path.join(saved_model_dir_24, "aqi_target_aqi_24h_target_scaler.pkl"))
+    scalers["24h"] = scaler_24
+
+    # Load 48h model + scaler
+    model_48 = mr.get_best_model("aqi_predictor_target_aqi_48h", metric="rmse", direction="min")
+    saved_model_dir_48 = model_48.download()
+    clf_48 = joblib.load(os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_model.pkl"))
+    scaler_48 = joblib.load(os.path.join(saved_model_dir_48, "aqi_target_aqi_48h_target_scaler.pkl"))
+    scalers["48h"] = scaler_48
+
+    # Load 72h model + scaler
+    model_72 = mr.get_best_model("aqi_predictor_target_aqi_72h", metric="rmse", direction="min")
+    saved_model_dir_72 = model_72.download()
+    clf_72 = joblib.load(os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_model.pkl"))
+    scaler_72 = joblib.load(os.path.join(saved_model_dir_72, "aqi_target_aqi_72h_target_scaler.pkl"))
+    scalers["72h"] = scaler_72
+
+    return clf_24, clf_48, clf_72, scalers
+
 def load_forecast():
-    """
-    ✅ Load 3-day AQI forecast using inference module.
-    All predictions automatically inverse-transformed to original AQI scale.
-    """
+    """Load 3-day AQI forecast from Hopsworks models (FRESH every load)."""
     try:
-        print("[INFO] Loading forecast using inference module...")
-        
-        # ✅ USE INFERENCE MODULE - No duplicated logic
-        predictions = predict_aqi_forecast()
-        
+        project = get_hopsworks_project()
+        clf_24, clf_48, clf_72, scalers = get_hopsworks_models(project)
+        fs = project.get_feature_store()
+        fg = fs.get_feature_group("aqi_features", version=7)
+        df = fg.read()
+
+        df["timestamp"] = pd.to_datetime(
+            df["timestamp"],
+            utc=True,
+            errors="coerce"
+        )
+
+        df = df.sort_values("timestamp")
+
+        if len(df) < 25:
+            raise RuntimeError(
+                "Not enough history to compute lag features."
+            )
+
+        df["aqi"] = pd.to_numeric(
+            df["aqi"],
+            errors="coerce"
+        )
+
+        # Create lag features
+        df["aqi_lag_1h"] = df["aqi"].shift(1)
+        df["aqi_lag_3h"] = df["aqi"].shift(3)
+        df["aqi_lag_6h"] = df["aqi"].shift(6)
+        df["aqi_lag_24h"] = df["aqi"].shift(24)
+
+        # Create derived features
+        df["aqi_change_1h"] = (
+            df["aqi"] - df["aqi_lag_1h"]
+        )
+
+        df["aqi_roll_3h"] = (
+            df["aqi"].rolling(3).mean()
+        )
+
+        df["aqi_roll_6h"] = (
+            df["aqi"].rolling(6).mean()
+        )
+
+        df["aqi_roll_24h"] = (
+            df["aqi"].rolling(24).mean()
+        )
+
+        df["aqi_roll_std"] = (
+            df["aqi"].rolling(6).std()
+        )
+
+        # Get latest available data
+        latest = df.tail(1)
+
+        feature_cols = [
+            "pm25",
+            "pm10",
+            "no2",
+            "co",
+            "o3",
+            "temperature",
+            "humidity",
+            "wind_speed",
+            "pressure",
+            "precipitation",
+            "cloud_cover",
+            "wind_u",
+            "wind_v",
+            "hour_sin",
+            "hour_cos",
+            "month_sin",
+            "month_cos",
+            "dow_sin",
+            "dow_cos",
+            "is_rush_hour",
+            "is_weekend",
+            "aqi_lag_1h",
+            "aqi_lag_3h",
+            "aqi_lag_6h",
+            "aqi_lag_24h",
+            "aqi_change_1h",
+            "aqi_roll_3h",
+            "aqi_roll_6h",
+            "aqi_roll_24h",
+            "aqi_roll_std",
+        ]
+
+        X = latest[feature_cols]
+
+        # Handle missing values - use recent rolling stats instead of fallback
+        if X.isna().any(axis=None):
+            print("\n[WARN] Latest row has NaN features. Using recent data backfill...")
+            recent = df[feature_cols].tail(48).fillna(method='ffill').fillna(method='bfill')
+            if recent.empty or recent.isna().any(axis=None).any():
+                raise RuntimeError("Cannot fill NaN features even with recent 48-hour history.")
+            X = recent.tail(1)
+            print("[OK] Features backfilled from recent data")
+
+        # DEBUG: Print actual features being used
+        print("\n" + "="*70)
+        print("[DEBUG] FEATURES BEING FED TO MODELS:")
+        print("="*70)
+        print(X.to_string())
+        print(f"\nNaN count per column:")
+        print(X.isna().sum())
+        print(f"\nLatest actual AQI in history: {df['aqi'].iloc[-1]:.1f}")
+        data_age_minutes = (datetime.now(timezone.utc) - df['timestamp'].iloc[-1]).total_seconds() / 60
+        print(f"Data age: {data_age_minutes:.1f} minutes")
+        print("="*70 + "\n")
+
+        # Make predictions and INVERSE TRANSFORM
+        print("[DEBUG] Making predictions with loaded models...")
+        pred_24_scaled = float(clf_24.predict(X)[0])
+        pred_48_scaled = float(clf_48.predict(X)[0])
+        pred_72_scaled = float(clf_72.predict(X)[0])
+
+        # Inverse transform using the saved scalers
+        pred_24 = float(scalers["24h"].inverse_transform([[pred_24_scaled]])[0][0])
+        pred_48 = float(scalers["48h"].inverse_transform([[pred_48_scaled]])[0][0])
+        pred_72 = float(scalers["72h"].inverse_transform([[pred_72_scaled]])[0][0])
+
+        # Debug information
+        print("===== AQI FORECAST DEBUG =====")
+        print(f"Latest timestamp: {latest['timestamp'].iloc[0]}")
+        print(f"Latest actual AQI: {latest['aqi'].iloc[0]}")
+        print(f"24h prediction (scaled): {pred_24_scaled:.4f} -> (inverse): {pred_24:.1f}")
+        print(f"48h prediction (scaled): {pred_48_scaled:.4f} -> (inverse): {pred_48:.1f}")
+        print(f"72h prediction (scaled): {pred_72_scaled:.4f} -> (inverse): {pred_72:.1f}")
+        print("==============================")
+
+        # Generate forecast dates
         today = datetime.now()
-        
+
         return [
             {
-                "date": (today + timedelta(days=1)).strftime("%a, %b %d"),
-                "full_date": (today + timedelta(days=1)).strftime("%A, %B %d"),
-                "aqi": max(0, predictions["24h"]),
+                "date": (
+                    today + timedelta(days=1)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=1)
+                ).strftime("%A, %B %d"),
+                "aqi": max(0, pred_24),
             },
             {
-                "date": (today + timedelta(days=2)).strftime("%a, %b %d"),
-                "full_date": (today + timedelta(days=2)).strftime("%A, %B %d"),
-                "aqi": max(0, predictions["48h"]),
+                "date": (
+                    today + timedelta(days=2)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=2)
+                ).strftime("%A, %B %d"),
+                "aqi": max(0, pred_48),
             },
             {
-                "date": (today + timedelta(days=3)).strftime("%a, %b %d"),
-                "full_date": (today + timedelta(days=3)).strftime("%A, %B %d"),
-                "aqi": max(0, predictions["72h"]),
+                "date": (
+                    today + timedelta(days=3)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=3)
+                ).strftime("%A, %B %d"),
+                "aqi": max(0, pred_72),
             },
         ]
 
     except Exception as exc:
-        print(f"[ERROR] Forecast load failed: {exc}")
-        st.warning(f"Could not load live model predictions. ({exc})")
-        
-        # Fallback
+        print(f"[ERROR] Model load failed: {exc}")
+        st.warning(
+            f"Could not load live model predictions. ({exc})"
+        )
+
         today = datetime.now()
+
         return [
             {
-                "date": (today + timedelta(days=1)).strftime("%a, %b %d"),
-                "full_date": (today + timedelta(days=1)).strftime("%A, %B %d"),
+                "date": (
+                    today + timedelta(days=1)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=1)
+                ).strftime("%A, %B %d"),
                 "aqi": 75,
             },
             {
-                "date": (today + timedelta(days=2)).strftime("%a, %b %d"),
-                "full_date": (today + timedelta(days=2)).strftime("%A, %B %d"),
+                "date": (
+                    today + timedelta(days=2)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=2)
+                ).strftime("%A, %B %d"),
                 "aqi": 80,
             },
             {
-                "date": (today + timedelta(days=3)).strftime("%a, %b %d"),
-                "full_date": (today + timedelta(days=3)).strftime("%A, %B %d"),
+                "date": (
+                    today + timedelta(days=3)
+                ).strftime("%a, %b %d"),
+                "full_date": (
+                    today + timedelta(days=3)
+                ).strftime("%A, %B %d"),
                 "aqi": 70,
             },
         ]
